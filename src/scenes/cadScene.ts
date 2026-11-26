@@ -79,6 +79,8 @@ export class CadScene implements DemoScene {
 
   constructor(private readonly dom: HTMLElement) {
     this.root.add(this.lights, this.ground, this.model);
+    // Start at the target angle so nothing animates when the scene opens.
+    this.model.rotation.y = this.targetYaw;
 
     this.lights.add(new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.6));
     // Light from almost straight above so the shadow sits under the model.
