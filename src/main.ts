@@ -18,7 +18,13 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 // ---------------------------------------------------------------- rendering
 const canvas = $<HTMLCanvasElement>('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const context = canvas.getContext('webgl2', {
+  antialias: true,
+  powerPreference: 'high-performance',
+  // Lets the browser show frames without waiting for the page compositor.
+  desynchronized: settings.lowLatencyCanvas,
+}) as WebGL2RenderingContext;
+const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -205,7 +211,8 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   ];
   if (settings.input === 'webcam' && lastObs) {
     lines.push(
-      `Tracking    ${num(fps(trackTimes), 0, 3)} fps, Erkennung ${num(lastObs.detectMs, 1, 5)} ms`,
+      `Tracking    ${num(fps(trackTimes), 0, 3)} fps, verworfen ${num(tracker?.droppedFrames ?? 0, 0, 5)}`,
+      `Erkennung   ${num(lastObs.detectMs, 1, 5)} ms, gesamt ${num(lastObs.totalMs, 1, 5)} ms ${tracker?.useWorker ? '(Worker)' : '(Haupt)'}`,
       `Latenz      ${num(avg(pipelineLatency), 0, 4)} ms ${lastObs.hasCaptureTime ? 'ab Aufnahme' : 'ab Frame (geschätzt)'}`,
       `Alter       ${num(performance.now() - lastObsTime, 0, 4)} ms seit letztem Frame`,
       `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight} @ ${num(tracker?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
@@ -298,6 +305,21 @@ input
       oneEuro.reset();
     }
   });
+input
+  .add(settings, 'detectInWorker')
+  .name('Erkennung im Worker')
+  .onChange(async () => {
+    persist();
+    if (tracker) {
+      tracker.stop();
+      tracker = null;
+      await startWebcam();
+    }
+  });
+input
+  .add(settings, 'lowLatencyCanvas')
+  .name('Low-Latency-Canvas (neu laden)')
+  .onChange(persist);
 input.add(settings, 'eye', { Mitte: 'center', 'Linkes Auge': 'left', 'Rechtes Auge': 'right' }).name('Auge').onFinishChange(persist);
 
 const filt = gui.addFolder('Glättung');
@@ -430,7 +452,7 @@ function parseMode(m: string): CameraMode {
 
 async function startWebcam(): Promise<void> {
   if (tracker) return;
-  tracker = new FaceTracker(onFace);
+  tracker = new FaceTracker(onFace, settings.detectInWorker);
   try {
     await tracker.start(parseMode(settings.cameraMode));
     settings.input = 'webcam';

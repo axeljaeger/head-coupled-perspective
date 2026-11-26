@@ -16,6 +16,10 @@ export interface Settings {
   input: 'webcam' | 'mouse';
   /** Requested camera mode, "WIDTHxHEIGHT@FPS". The browser may deliver less. */
   cameraMode: string;
+  /** Run face detection in a Web Worker instead of the render thread. */
+  detectInWorker: boolean;
+  /** Ask the browser for a low-latency (desynchronized) canvas. Needs reload. */
+  lowLatencyCanvas: boolean;
   eye: 'center' | 'left' | 'right';
 
   // Filtering
@@ -60,6 +64,8 @@ export const defaultSettings: Settings = {
   compensateWindowPosition: true,
   input: 'webcam',
   cameraMode: '1280x720@60',
+  detectInWorker: true,
+  lowLatencyCanvas: true,
   eye: 'center',
   filterEnabled: true,
   filterType: 'kalman',
