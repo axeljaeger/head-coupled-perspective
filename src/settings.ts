@@ -18,6 +18,12 @@ export interface Settings {
 
   // Filtering
   filterEnabled: boolean;
+  filterType: 'oneEuro' | 'kalman';
+  /** Kalman: standard deviation of head acceleration (m/s²). Higher = follows faster, noisier. */
+  kalmanAccel: number;
+  /** Kalman: measurement noise of the eye position, x/y and z (mm). */
+  kalmanNoiseXYmm: number;
+  kalmanNoiseZmm: number;
   /** Cutoff (Hz) while the head is still. Lower = calmer but laggier. */
   filterMinCutoff: number;
   /** Cutoff increase per m/s of head speed. Higher = less lag on fast moves. */
@@ -53,6 +59,10 @@ export const defaultSettings: Settings = {
   input: 'webcam',
   eye: 'center',
   filterEnabled: true,
+  filterType: 'oneEuro',
+  kalmanAccel: 1.5,
+  kalmanNoiseXYmm: 1.5,
+  kalmanNoiseZmm: 5,
   filterMinCutoff: 1.5,
   filterBeta: 40,
   filterDCutoff: 4,

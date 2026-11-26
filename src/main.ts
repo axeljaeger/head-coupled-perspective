@@ -3,6 +3,7 @@ import GUI from 'lil-gui';
 import { loadSettings, saveSettings, defaultSettings, type Settings } from './settings';
 import { FaceTracker, type FaceObservation } from './tracking/faceTracker';
 import { OneEuroFilter3 } from './tracking/oneEuroFilter';
+import { KalmanCV3 } from './tracking/kalmanFilter';
 import { calibrateHfov, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
 import { updateOffAxisCamera } from './projection/offAxis';
 import type { DemoScene } from './scenes/types';
@@ -62,7 +63,16 @@ function layoutIfNeeded(vp: ReturnType<typeof viewport>): void {
 }
 
 // ---------------------------------------------------------------- tracking
-const filter = new OneEuroFilter3();
+const oneEuro = new OneEuroFilter3();
+const kalman = new KalmanCV3();
+let filter: OneEuroFilter3 | KalmanCV3 = oneEuro;
+function selectFilter(): void {
+  const next = settings.filterType === 'kalman' ? kalman : oneEuro;
+  if (next !== filter) next.reset();
+  filter = next;
+  oneEuro.configure(settings.filterMinCutoff, settings.filterBeta, settings.filterDCutoff);
+  kalman.configure(settings.kalmanAccel, settings.kalmanNoiseXYmm / 1000, settings.kalmanNoiseZmm / 1000);
+}
 let filtered: Vec3 | null = null;
 let lastObs: FaceObservation | null = null;
 let lastObsTime = 0;
@@ -85,7 +95,7 @@ function onFace(obs: FaceObservation | null): void {
   lastCaptureTime = obs.captureTime;
   push(pipelineLatency, performance.now() - obs.captureTime, 30);
   const raw = eyeInScreenSpace(obs, settings);
-  filter.configure(settings.filterMinCutoff, settings.filterBeta, settings.filterDCutoff);
+  selectFilter();
   // Filter on capture time so irregular delivery does not distort the speed estimate.
   filtered = settings.filterEnabled ? filter.filter(raw, obs.captureTime / 1000) : raw;
   if (!settings.filterEnabled) filter.reset();
@@ -186,7 +196,7 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const lines = [
     `Eingabe     ${settings.input === 'mouse' ? 'Maus' : tracking ? 'Webcam: Gesicht erkannt' : 'Webcam: kein Gesicht'}`,
-    `Kopplung    ${settings.headCoupling ? 'an' : 'AUS (statisch)'}, Filter ${settings.filterEnabled ? 'an' : 'AUS'}`,
+    `Kopplung    ${settings.headCoupling ? 'an' : 'AUS (statisch)'}, Filter ${settings.filterEnabled ? (settings.filterType === 'kalman' ? 'Kalman' : 'One Euro') : 'AUS'}`,
     `Auge (cm)   x${cm(eye.x)} y${cm(eye.y)} z${cm(eye.z)}`,
     `Fenster     ${(vp.width * 100).toFixed(1)} x ${(vp.height * 100).toFixed(1)} cm`,
     `Render      ${num(fps(frameTimes), 0, 3)} fps`,
@@ -278,9 +288,44 @@ input.add(settings, 'eye', { Mitte: 'center', 'Linkes Auge': 'left', 'Rechtes Au
 
 const filt = gui.addFolder('Glättung');
 const filterCtl = filt.add(settings, 'filterEnabled').name('Filter an (G)').onChange(persist);
-filt.add(settings, 'filterMinCutoff', 0.1, 20, 0.1).name('Min. Grenzfrequenz (Hz)').onFinishChange(persist);
-filt.add(settings, 'filterBeta', 0, 200, 1).name('Beta (Hz pro m/s)').onFinishChange(persist);
-filt.add(settings, 'filterDCutoff', 0.5, 15, 0.5).name('Grenzfreq. Tempo (Hz)').onFinishChange(persist);
+filt
+  .add(settings, 'filterType', { 'One Euro': 'oneEuro', Kalman: 'kalman' })
+  .name('Filtertyp (K)')
+  .onChange(() => {
+    showFilterParams();
+    persist();
+  });
+const oneEuroCtls = [
+  filt.add(settings, 'filterMinCutoff', 0.1, 20, 0.1).name('Min. Grenzfrequenz (Hz)').onFinishChange(persist),
+  filt.add(settings, 'filterBeta', 0, 200, 1).name('Beta (Hz pro m/s)').onFinishChange(persist),
+  filt.add(settings, 'filterDCutoff', 0.5, 15, 0.5).name('Grenzfreq. Tempo (Hz)').onFinishChange(persist),
+];
+const kalmanCtls = [
+  filt.add(settings, 'kalmanAccel', 0.1, 20, 0.1).name('Beschleunigung σ (m/s²)').onFinishChange(persist),
+  filt.add(settings, 'kalmanNoiseXYmm', 0.1, 20, 0.1).name('Messrauschen x/y (mm)').onFinishChange(persist),
+  filt.add(settings, 'kalmanNoiseZmm', 0.1, 50, 0.1).name('Messrauschen z (mm)').onFinishChange(persist),
+  filt
+    .add(
+      {
+        fromJitter: () => {
+          // Sit still, then take the observed raw jitter as measurement noise.
+          const sd = stdDevMm(rawHistory);
+          if (rawHistory.length < 10) return alertInDebug('Zu wenig Messwerte, erst Gesicht erkennen lassen.');
+          settings.kalmanNoiseXYmm = +Math.max((sd[0] + sd[1]) / 2, 0.1).toFixed(1);
+          settings.kalmanNoiseZmm = +Math.max(sd[2], 0.1).toFixed(1);
+          gui.controllersRecursive().forEach((c) => c.updateDisplay());
+          persist();
+        },
+      },
+      'fromJitter',
+    )
+    .name('Messrauschen aus Jitter (still sitzen)'),
+];
+function showFilterParams(): void {
+  const k = settings.filterType === 'kalman';
+  oneEuroCtls.forEach((c) => c.show(!k));
+  kalmanCtls.forEach((c) => c.show(k));
+}
 filt.add(settings, 'latencyCompensation').name('Latenz kompensieren').onChange(persist);
 filt.add(settings, 'predictionMs', 0, 100, 1).name('Zusätzl. Vorhersage (ms)').onFinishChange(persist);
 
@@ -327,6 +372,12 @@ window.addEventListener('keydown', (e) => {
     case 'h':
       settings.headCoupling = !settings.headCoupling;
       couplingCtl.updateDisplay();
+      persist();
+      break;
+    case 'k':
+      settings.filterType = settings.filterType === 'kalman' ? 'oneEuro' : 'kalman';
+      gui.controllersRecursive().forEach((c) => c.updateDisplay());
+      showFilterParams();
       persist();
       break;
     case 'g':
@@ -392,6 +443,7 @@ $('start-mouse').addEventListener('click', () => {
 
 setScene(settings.scene);
 applyDebugVisibility();
+showFilterParams();
 
 let prev = performance.now();
 function frame(now: number): void {

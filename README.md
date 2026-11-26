@@ -37,6 +37,7 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 | --- | --- |
 | <kbd>H</kbd> | Head coupling on/off, for A/B comparison with a static view |
 | <kbd>G</kbd> | Smoothing filter on/off |
+| <kbd>K</kbd> | Switch between One Euro and Kalman filter |
 | <kbd>F</kbd> | Fullscreen |
 | <kbd>D</kbd> | Debug overlay (camera image, eye position, fps, latency, jitter) |
 | <kbd>1</kbd> / <kbd>2</kbd> | Target box scene / CAD-like model (drag to rotate) |
@@ -52,6 +53,12 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
   capture timestamp to the moment of rendering. This hides camera and
   detection latency and the 30 fps stepping of the webcam. *Zusätzl.
   Vorhersage* adds more on top, e.g. for display latency.
+- **Kalman filter** (alternative to One Euro): constant-velocity model per
+  axis. *Beschleunigung σ* sets how quickly the head may change speed;
+  *Messrauschen* should match the raw jitter. Sit still and press
+  *Messrauschen aus Jitter* to take it from the measurement. In simulation it
+  tracks continuous motion more closely than One Euro, at the cost of slightly
+  more jitter at rest and a little overshoot after abrupt stops.
 - **Gain** (*Verstärkung*): 1 is physically correct. Values above 1 exaggerate
   the parallax, which can help or hurt.
 
