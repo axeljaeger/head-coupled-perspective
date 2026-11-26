@@ -59,7 +59,7 @@ export const defaultSettings: Settings = {
   input: 'webcam',
   eye: 'center',
   filterEnabled: true,
-  filterType: 'oneEuro',
+  filterType: 'kalman',
   kalmanAccel: 1.5,
   kalmanNoiseXYmm: 1.5,
   kalmanNoiseZmm: 5,
