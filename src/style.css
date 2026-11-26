@@ -1,0 +1,105 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  font-family: system-ui, sans-serif;
+}
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+.overlay.hidden {
+  display: none;
+}
+.card {
+  max-width: 520px;
+  background: #151a22;
+  color: #e6e9ee;
+  padding: 24px 28px;
+  border-radius: 12px;
+  line-height: 1.45;
+}
+.card h1 {
+  margin-top: 0;
+  font-size: 22px;
+}
+.small {
+  font-size: 13px;
+  color: #a8b0bc;
+}
+.buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+button {
+  font: inherit;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 0;
+  background: #3fa7ff;
+  color: #04111f;
+  cursor: pointer;
+}
+button.secondary {
+  background: #2a3240;
+  color: #e6e9ee;
+}
+.error {
+  color: #ff7b7b;
+}
+#debug {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  z-index: 5;
+  background: rgba(10, 12, 16, 0.75);
+  color: #cfe3ff;
+  padding: 6px;
+  border-radius: 6px;
+  font: 11px/1.35 ui-monospace, monospace;
+  pointer-events: none;
+}
+#debug.hidden {
+  display: none;
+}
+#debug pre {
+  margin: 4px 0 0;
+}
+#debug-video {
+  display: block;
+  background: #000;
+}
+#help {
+  position: fixed;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  color: #9aa4b2;
+  font-size: 12px;
+  background: rgba(10, 12, 16, 0.6);
+  padding: 4px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 5;
+}
+kbd {
+  border: 1px solid #556;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 11px;
+}

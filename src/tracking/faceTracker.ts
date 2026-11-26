@@ -1,0 +1,124 @@
+import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from '@mediapipe/tasks-vision';
+
+// Eye corner landmarks of the MediaPipe face mesh. Corners are steadier than
+// the iris centres because they do not move with gaze.
+// "Subject right" is the eye that appears on the left of the (unmirrored) image.
+const SUBJECT_RIGHT_EYE = [33, 133];
+const SUBJECT_LEFT_EYE = [362, 263];
+
+export interface FaceObservation {
+  /** performance.now() when the frame was handed to the detector. */
+  timestamp: number;
+  /** Time the detector took for this frame, ms. */
+  detectMs: number;
+  videoWidth: number;
+  videoHeight: number;
+  /** Eye centres in pixel coordinates of the camera image. */
+  subjectLeftPx: [number, number];
+  subjectRightPx: [number, number];
+  /** Head yaw in radians from the facial transformation matrix (0 = facing the camera). */
+  yaw: number;
+  landmarks: NormalizedLandmark[];
+}
+
+export type FaceListener = (obs: FaceObservation | null) => void;
+
+/** Webcam + MediaPipe Face Landmarker, delivering one observation per video frame. */
+export class FaceTracker {
+  readonly video: HTMLVideoElement;
+  private landmarker: FaceLandmarker | null = null;
+  private stream: MediaStream | null = null;
+  private running = false;
+  private lastVideoTime = -1;
+
+  constructor(private readonly onFace: FaceListener) {
+    this.video = document.createElement('video');
+    this.video.playsInline = true;
+    this.video.muted = true;
+  }
+
+  async start(): Promise<void> {
+    const base = import.meta.env.BASE_URL;
+    const fileset = await FilesetResolver.forVisionTasks(`${base}mediapipe/wasm`);
+    const options = (delegate: 'GPU' | 'CPU') => ({
+      baseOptions: { modelAssetPath: `${base}mediapipe/face_landmarker.task`, delegate },
+      runningMode: 'VIDEO' as const,
+      numFaces: 1,
+      outputFacialTransformationMatrixes: true,
+    });
+    try {
+      this.landmarker = await FaceLandmarker.createFromOptions(fileset, options('GPU'));
+    } catch (e) {
+      console.warn('GPU delegate failed, falling back to CPU', e);
+      this.landmarker = await FaceLandmarker.createFromOptions(fileset, options('CPU'));
+    }
+
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 }, facingMode: 'user' },
+    });
+    this.video.srcObject = this.stream;
+    await this.video.play();
+    this.running = true;
+    this.scheduleNext();
+  }
+
+  stop(): void {
+    this.running = false;
+    this.stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+  }
+
+  private scheduleNext(): void {
+    if (!this.running) return;
+    if ('requestVideoFrameCallback' in this.video) {
+      this.video.requestVideoFrameCallback(() => this.process());
+    } else {
+      requestAnimationFrame(() => this.process());
+    }
+  }
+
+  private process(): void {
+    if (!this.running || !this.landmarker) return;
+    const v = this.video;
+    if (v.currentTime !== this.lastVideoTime && v.videoWidth > 0) {
+      this.lastVideoTime = v.currentTime;
+      const t0 = performance.now();
+      const result = this.landmarker.detectForVideo(v, t0);
+      const detectMs = performance.now() - t0;
+      const lm = result.faceLandmarks[0];
+      if (lm) {
+        const w = v.videoWidth;
+        const h = v.videoHeight;
+        const centre = (ids: number[]): [number, number] => {
+          let x = 0;
+          let y = 0;
+          for (const i of ids) {
+            x += lm[i].x;
+            y += lm[i].y;
+          }
+          return [(x / ids.length) * w, (y / ids.length) * h];
+        };
+        let yaw = 0;
+        const m = result.facialTransformationMatrixes?.[0]?.data;
+        if (m && m.length === 16) {
+          // Column-major 4x4; third column is the face's forward axis.
+          yaw = Math.atan2(m[8], m[10]);
+        }
+        this.onFace({
+          timestamp: t0,
+          detectMs,
+          videoWidth: w,
+          videoHeight: h,
+          subjectLeftPx: centre(SUBJECT_LEFT_EYE),
+          subjectRightPx: centre(SUBJECT_RIGHT_EYE),
+          yaw,
+          landmarks: lm,
+        });
+      } else {
+        this.onFace(null);
+      }
+    }
+    this.scheduleNext();
+  }
+}
