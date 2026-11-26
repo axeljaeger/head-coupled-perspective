@@ -67,7 +67,7 @@ export const defaultSettings: Settings = {
   compensateWindowPosition: true,
   input: 'webcam',
   cameraMode: '1280x720@60',
-  detectInWorker: true,
+  detectInWorker: false,
   lowLatencyCanvas: true,
   eye: 'center',
   filterEnabled: true,
