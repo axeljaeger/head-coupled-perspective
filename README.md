@@ -36,6 +36,7 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 | Key | Action |
 | --- | --- |
 | <kbd>H</kbd> | Head coupling on/off, for A/B comparison with a static view |
+| <kbd>G</kbd> | Smoothing filter on/off |
 | <kbd>F</kbd> | Fullscreen |
 | <kbd>D</kbd> | Debug overlay (camera image, eye position, fps, latency, jitter) |
 | <kbd>1</kbd> / <kbd>2</kbd> | Target box scene / CAD-like model (drag to rotate) |
@@ -45,7 +46,8 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 - **Jitter** (debug overlay): standard deviation of the eye position over the
   last 30 frames, raw and filtered. Depth (z) is usually the noisiest axis.
 - **Smoothing** (*Glättung*): One Euro filter. Lower *Min. Grenzfrequenz*
-  means a calmer image but more lag; higher *Beta* reduces lag for fast moves.
+  means a calmer image but more lag; higher *Beta* (Hz per m/s of head speed)
+  reduces lag for fast moves. <kbd>G</kbd> turns the filter off for comparison.
   *Vorhersage* extrapolates the motion to hide camera latency.
 - **Gain** (*Verstärkung*): 1 is physically correct. Values above 1 exaggerate
   the parallax, which can help or hurt.

@@ -17,7 +17,10 @@ export interface Settings {
   eye: 'center' | 'left' | 'right';
 
   // Filtering
+  filterEnabled: boolean;
+  /** Cutoff (Hz) while the head is still. Lower = calmer but laggier. */
   filterMinCutoff: number;
+  /** Cutoff increase per m/s of head speed. Higher = less lag on fast moves. */
   filterBeta: number;
   /** Extrapolate the filtered head position by this many milliseconds to hide latency. */
   predictionMs: number;
@@ -42,8 +45,9 @@ export const defaultSettings: Settings = {
   compensateWindowPosition: true,
   input: 'webcam',
   eye: 'center',
-  filterMinCutoff: 1.0,
-  filterBeta: 0.02,
+  filterEnabled: true,
+  filterMinCutoff: 1.5,
+  filterBeta: 40,
   predictionMs: 0,
   gainXY: 1,
   gainZ: 1,
@@ -52,7 +56,7 @@ export const defaultSettings: Settings = {
   showDebug: true,
 };
 
-const STORAGE_KEY = 'hcp-settings-v1';
+const STORAGE_KEY = 'hcp-settings-v2';
 
 export function loadSettings(): Settings {
   try {

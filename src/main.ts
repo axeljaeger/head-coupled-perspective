@@ -82,7 +82,8 @@ function onFace(obs: FaceObservation | null): void {
   lastObsTime = obs.timestamp;
   const raw = eyeInScreenSpace(obs, settings);
   filter.configure(settings.filterMinCutoff, settings.filterBeta);
-  filtered = filter.filter(raw, obs.timestamp / 1000);
+  filtered = settings.filterEnabled ? filter.filter(raw, obs.timestamp / 1000) : raw;
+  if (!settings.filterEnabled) filter.reset();
   push(rawHistory, raw, 30);
   push(filteredHistory, filtered, 30);
   push(trackTimes, obs.timestamp, 30);
@@ -107,7 +108,7 @@ function currentEye(vp: ReturnType<typeof viewport>): THREE.Vector3 {
   if (settings.input === 'mouse') {
     e = [(mouse[0] - 0.5) * vp.width * 1.2 + vp.cx, (0.5 - mouse[1]) * vp.height * 1.2 + vp.cy, NEUTRAL_Z];
   } else if (filtered) {
-    const d = filter.derivative();
+    const d = settings.filterEnabled ? filter.derivative() : [0, 0, 0];
     const p = settings.predictionMs / 1000;
     e = [filtered[0] + d[0] * p, filtered[1] + d[1] * p, filtered[2] + d[2] * p];
   } else {
@@ -175,7 +176,7 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   const mm = (v: Vec3) => v.map((x) => x.toFixed(1)).join(' / ');
   const lines = [
     `Eingabe     ${settings.input === 'mouse' ? 'Maus' : tracking ? 'Webcam: Gesicht erkannt' : 'Webcam: kein Gesicht'}`,
-    `Kopplung    ${settings.headCoupling ? 'an' : 'AUS (statisch)'}`,
+    `Kopplung    ${settings.headCoupling ? 'an' : 'AUS (statisch)'}, Filter ${settings.filterEnabled ? 'an' : 'AUS'}`,
     `Auge (cm)   x${cm(eye.x)} y${cm(eye.y)} z${cm(eye.z)}`,
     `Fenster     ${(vp.width * 100).toFixed(1)} x ${(vp.height * 100).toFixed(1)} cm`,
     `Render      ${fps(frameTimes).toFixed(0)} fps`,
@@ -265,8 +266,9 @@ input
 input.add(settings, 'eye', { Mitte: 'center', 'Linkes Auge': 'left', 'Rechtes Auge': 'right' }).name('Auge').onFinishChange(persist);
 
 const filt = gui.addFolder('Glättung');
-filt.add(settings, 'filterMinCutoff', 0.05, 5, 0.05).name('Min. Grenzfrequenz (Hz)').onFinishChange(persist);
-filt.add(settings, 'filterBeta', 0, 1, 0.005).name('Beta (Geschwindigkeit)').onFinishChange(persist);
+const filterCtl = filt.add(settings, 'filterEnabled').name('Filter an (G)').onChange(persist);
+filt.add(settings, 'filterMinCutoff', 0.1, 20, 0.1).name('Min. Grenzfrequenz (Hz)').onFinishChange(persist);
+filt.add(settings, 'filterBeta', 0, 200, 1).name('Beta (Hz pro m/s)').onFinishChange(persist);
 filt.add(settings, 'predictionMs', 0, 100, 1).name('Vorhersage (ms)').onFinishChange(persist);
 
 const effect = gui.addFolder('Effekt');
@@ -312,6 +314,11 @@ window.addEventListener('keydown', (e) => {
     case 'h':
       settings.headCoupling = !settings.headCoupling;
       couplingCtl.updateDisplay();
+      persist();
+      break;
+    case 'g':
+      settings.filterEnabled = !settings.filterEnabled;
+      filterCtl.updateDisplay();
       persist();
       break;
     case 'f':
