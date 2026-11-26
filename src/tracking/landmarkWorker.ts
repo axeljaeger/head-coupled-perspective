@@ -9,7 +9,7 @@ export type WorkerRequest =
   | { type: 'frame'; image: VideoFrame | ImageBitmap; timestamp: number };
 
 export type WorkerResponse =
-  | { type: 'ready' }
+  | { type: 'ready'; delegate: 'GPU' | 'CPU' }
   | { type: 'error'; message: string }
   | { type: 'result'; detection: import('./landmarker').RawDetection };
 
@@ -20,8 +20,9 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
   if (msg.type === 'init') {
     try {
-      landmarker = await createLandmarker(msg.baseUrl, true);
-      post({ type: 'ready' });
+      const created = await createLandmarker(msg.baseUrl, true);
+      landmarker = created.landmarker;
+      post({ type: 'ready', delegate: created.delegate });
     } catch (err) {
       post({ type: 'error', message: String((err as Error)?.message ?? err) });
     }

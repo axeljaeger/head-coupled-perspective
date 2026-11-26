@@ -9,7 +9,10 @@ export interface RawDetection {
 }
 
 /** Creates a Face Landmarker; `baseUrl` must point at the folder holding mediapipe/. */
-export async function createLandmarker(baseUrl: string, useModule: boolean): Promise<FaceLandmarker> {
+export async function createLandmarker(
+  baseUrl: string,
+  useModule: boolean,
+): Promise<{ landmarker: FaceLandmarker; delegate: 'GPU' | 'CPU' }> {
   const fileset = await FilesetResolver.forVisionTasks(`${baseUrl}mediapipe/wasm`, useModule);
   const options = (delegate: 'GPU' | 'CPU') => ({
     baseOptions: { modelAssetPath: `${baseUrl}mediapipe/face_landmarker.task`, delegate },
@@ -19,10 +22,10 @@ export async function createLandmarker(baseUrl: string, useModule: boolean): Pro
     outputFacialTransformationMatrixes: true,
   });
   try {
-    return await FaceLandmarker.createFromOptions(fileset, options('GPU'));
+    return { landmarker: await FaceLandmarker.createFromOptions(fileset, options('GPU')), delegate: 'GPU' };
   } catch (e) {
     console.warn('GPU delegate failed, falling back to CPU', e);
-    return await FaceLandmarker.createFromOptions(fileset, options('CPU'));
+    return { landmarker: await FaceLandmarker.createFromOptions(fileset, options('CPU')), delegate: 'CPU' };
   }
 }
 

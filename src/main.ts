@@ -212,7 +212,7 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   if (settings.input === 'webcam' && lastObs) {
     lines.push(
       `Tracking    ${num(fps(trackTimes), 0, 3)} fps, verworfen ${num(tracker?.droppedFrames ?? 0, 0, 5)}`,
-      `Erkennung   ${num(lastObs.detectMs, 1, 5)} ms, gesamt ${num(lastObs.totalMs, 1, 5)} ms ${tracker?.useWorker ? '(Worker)' : '(Haupt)'}`,
+      `Erkennung   ${num(lastObs.detectMs, 1, 5)} ms, gesamt ${num(lastObs.totalMs, 1, 5)} ms ${tracker?.useWorker ? 'Worker' : 'Haupt'}/${tracker?.delegate}`,
       `Latenz      ${num(avg(pipelineLatency), 0, 4)} ms ${lastObs.hasCaptureTime ? 'ab Aufnahme' : 'ab Frame (geschätzt)'}`,
       `Alter       ${num(performance.now() - lastObsTime, 0, 4)} ms seit letztem Frame`,
       `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight} @ ${num(tracker?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,

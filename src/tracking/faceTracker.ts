@@ -53,6 +53,8 @@ export class FaceTracker {
   private lastVideoTime = -1;
   /** Frames dropped because detection was still busy with the previous one. */
   droppedFrames = 0;
+  /** Which MediaPipe backend ended up running the model. */
+  delegate: 'GPU' | 'CPU' | '?' = '?';
 
   constructor(
     private readonly onFace: FaceListener,
@@ -74,7 +76,9 @@ export class FaceTracker {
     if (this.useWorker) {
       await this.startWorker(baseUrl);
     } else {
-      this.landmarker = await createLandmarker(baseUrl, false);
+      const created = await createLandmarker(baseUrl, false);
+      this.landmarker = created.landmarker;
+      this.delegate = created.delegate;
     }
     await this.openCamera(mode);
     this.running = true;
@@ -86,7 +90,10 @@ export class FaceTracker {
     return new Promise((resolve, reject) => {
       this.worker!.onmessage = (e: MessageEvent<WorkerResponse>) => {
         const msg = e.data;
-        if (msg.type === 'ready') resolve();
+        if (msg.type === 'ready') {
+          this.delegate = msg.delegate;
+          resolve();
+        }
         else if (msg.type === 'error') reject(new Error(msg.message));
         else if (msg.type === 'result') {
           this.pendingWorker?.(msg.detection);
