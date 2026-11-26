@@ -79,6 +79,7 @@ button.secondary {
 }
 #debug pre {
   margin: 4px 0 0;
+  width: 46ch;
 }
 #debug-video {
   display: block;

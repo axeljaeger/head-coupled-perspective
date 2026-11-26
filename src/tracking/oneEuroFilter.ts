@@ -52,10 +52,11 @@ export class OneEuroFilter3 {
   readonly fy = new OneEuroFilter();
   readonly fz = new OneEuroFilter();
 
-  configure(minCutoff: number, beta: number): void {
+  configure(minCutoff: number, beta: number, dCutoff = 1): void {
     for (const f of [this.fx, this.fy, this.fz]) {
       f.minCutoff = minCutoff;
       f.beta = beta;
+      f.dCutoff = dCutoff;
     }
   }
 

@@ -48,7 +48,10 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 - **Smoothing** (*Glättung*): One Euro filter. Lower *Min. Grenzfrequenz*
   means a calmer image but more lag; higher *Beta* (Hz per m/s of head speed)
   reduces lag for fast moves. <kbd>G</kbd> turns the filter off for comparison.
-  *Vorhersage* extrapolates the motion to hide camera latency.
+  *Latenz kompensieren* extrapolates the head position from the camera's
+  capture timestamp to the moment of rendering. This hides camera and
+  detection latency and the 30 fps stepping of the webcam. *Zusätzl.
+  Vorhersage* adds more on top, e.g. for display latency.
 - **Gain** (*Verstärkung*): 1 is physically correct. Values above 1 exaggerate
   the parallax, which can help or hurt.
 

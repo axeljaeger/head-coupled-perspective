@@ -9,6 +9,14 @@ const SUBJECT_LEFT_EYE = [362, 263];
 export interface FaceObservation {
   /** performance.now() when the frame was handed to the detector. */
   timestamp: number;
+  /**
+   * When the camera captured the frame (performance.now() time base). Taken
+   * from requestVideoFrameCallback metadata where the browser provides it,
+   * otherwise equal to `timestamp`.
+   */
+  captureTime: number;
+  /** Whether captureTime is a real capture timestamp rather than a fallback. */
+  hasCaptureTime: boolean;
   /** Time the detector took for this frame, ms. */
   detectMs: number;
   videoWidth: number;
@@ -72,13 +80,13 @@ export class FaceTracker {
   private scheduleNext(): void {
     if (!this.running) return;
     if ('requestVideoFrameCallback' in this.video) {
-      this.video.requestVideoFrameCallback(() => this.process());
+      this.video.requestVideoFrameCallback((_now, meta) => this.process(meta.captureTime));
     } else {
       requestAnimationFrame(() => this.process());
     }
   }
 
-  private process(): void {
+  private process(captureTime?: number): void {
     if (!this.running || !this.landmarker) return;
     const v = this.video;
     if (v.currentTime !== this.lastVideoTime && v.videoWidth > 0) {
@@ -107,6 +115,8 @@ export class FaceTracker {
         }
         this.onFace({
           timestamp: t0,
+          captureTime: captureTime ?? t0,
+          hasCaptureTime: captureTime !== undefined,
           detectMs,
           videoWidth: w,
           videoHeight: h,

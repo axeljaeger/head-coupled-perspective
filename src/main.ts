@@ -66,6 +66,8 @@ const filter = new OneEuroFilter3();
 let filtered: Vec3 | null = null;
 let lastObs: FaceObservation | null = null;
 let lastObsTime = 0;
+let lastCaptureTime = 0;
+const pipelineLatency: number[] = [];
 let tracking = false;
 const rawHistory: Vec3[] = [];
 const filteredHistory: Vec3[] = [];
@@ -80,9 +82,12 @@ function onFace(obs: FaceObservation | null): void {
   tracking = true;
   lastObs = obs;
   lastObsTime = obs.timestamp;
+  lastCaptureTime = obs.captureTime;
+  push(pipelineLatency, performance.now() - obs.captureTime, 30);
   const raw = eyeInScreenSpace(obs, settings);
-  filter.configure(settings.filterMinCutoff, settings.filterBeta);
-  filtered = settings.filterEnabled ? filter.filter(raw, obs.timestamp / 1000) : raw;
+  filter.configure(settings.filterMinCutoff, settings.filterBeta, settings.filterDCutoff);
+  // Filter on capture time so irregular delivery does not distort the speed estimate.
+  filtered = settings.filterEnabled ? filter.filter(raw, obs.captureTime / 1000) : raw;
   if (!settings.filterEnabled) filter.reset();
   push(rawHistory, raw, 30);
   push(filteredHistory, filtered, 30);
@@ -109,7 +114,10 @@ function currentEye(vp: ReturnType<typeof viewport>): THREE.Vector3 {
     e = [(mouse[0] - 0.5) * vp.width * 1.2 + vp.cx, (0.5 - mouse[1]) * vp.height * 1.2 + vp.cy, NEUTRAL_Z];
   } else if (filtered) {
     const d = settings.filterEnabled ? filter.derivative() : [0, 0, 0];
-    const p = settings.predictionMs / 1000;
+    // Extrapolate from when the frame was captured to now, capped so a stalled
+    // camera cannot fling the view away.
+    const age = settings.latencyCompensation ? Math.min(performance.now() - lastCaptureTime, 150) : 0;
+    const p = (age + settings.predictionMs) / 1000;
     e = [filtered[0] + d[0] * p, filtered[1] + d[1] * p, filtered[2] + d[2] * p];
   } else {
     e = [vp.cx, vp.cy, NEUTRAL_Z];
@@ -172,21 +180,24 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   debugCanvas.style.display = settings.input === 'webcam' && tracker ? 'block' : 'none';
   const fps = (times: number[]) =>
     times.length > 1 ? ((times.length - 1) * 1000) / (times[times.length - 1] - times[0]) : 0;
-  const cm = (v: number) => (v * 100).toFixed(1).padStart(6);
-  const mm = (v: Vec3) => v.map((x) => x.toFixed(1)).join(' / ');
+  const num = (v: number, digits: number, width: number) => v.toFixed(digits).padStart(width);
+  const cm = (v: number) => num(v * 100, 1, 6);
+  const mm = (v: Vec3) => v.map((x) => num(x, 1, 5)).join(' /');
+  const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const lines = [
     `Eingabe     ${settings.input === 'mouse' ? 'Maus' : tracking ? 'Webcam: Gesicht erkannt' : 'Webcam: kein Gesicht'}`,
     `Kopplung    ${settings.headCoupling ? 'an' : 'AUS (statisch)'}, Filter ${settings.filterEnabled ? 'an' : 'AUS'}`,
     `Auge (cm)   x${cm(eye.x)} y${cm(eye.y)} z${cm(eye.z)}`,
     `Fenster     ${(vp.width * 100).toFixed(1)} x ${(vp.height * 100).toFixed(1)} cm`,
-    `Render      ${fps(frameTimes).toFixed(0)} fps`,
+    `Render      ${num(fps(frameTimes), 0, 3)} fps`,
   ];
   if (settings.input === 'webcam' && lastObs) {
     lines.push(
-      `Tracking    ${fps(trackTimes).toFixed(0)} fps, Erkennung ${lastObs.detectMs.toFixed(1)} ms`,
-      `Alter       ${(performance.now() - lastObsTime).toFixed(0)} ms seit letztem Frame`,
+      `Tracking    ${num(fps(trackTimes), 0, 3)} fps, Erkennung ${num(lastObs.detectMs, 1, 5)} ms`,
+      `Latenz      ${num(avg(pipelineLatency), 0, 4)} ms ${lastObs.hasCaptureTime ? 'ab Aufnahme' : 'ab Frame (geschätzt)'}`,
+      `Alter       ${num(performance.now() - lastObsTime, 0, 4)} ms seit letztem Frame`,
       `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight}, FOV ${settings.cameraHfovDeg.toFixed(1)}°`,
-      `Gierwinkel  ${((lastObs.yaw * 180) / Math.PI).toFixed(1)}°`,
+      `Gierwinkel  ${num((lastObs.yaw * 180) / Math.PI, 1, 6)}°`,
       `Jitter roh  ${mm(stdDevMm(rawHistory))} mm`,
       `Jitter gef. ${mm(stdDevMm(filteredHistory))} mm`,
     );
@@ -269,7 +280,9 @@ const filt = gui.addFolder('Glättung');
 const filterCtl = filt.add(settings, 'filterEnabled').name('Filter an (G)').onChange(persist);
 filt.add(settings, 'filterMinCutoff', 0.1, 20, 0.1).name('Min. Grenzfrequenz (Hz)').onFinishChange(persist);
 filt.add(settings, 'filterBeta', 0, 200, 1).name('Beta (Hz pro m/s)').onFinishChange(persist);
-filt.add(settings, 'predictionMs', 0, 100, 1).name('Vorhersage (ms)').onFinishChange(persist);
+filt.add(settings, 'filterDCutoff', 0.5, 15, 0.5).name('Grenzfreq. Tempo (Hz)').onFinishChange(persist);
+filt.add(settings, 'latencyCompensation').name('Latenz kompensieren').onChange(persist);
+filt.add(settings, 'predictionMs', 0, 100, 1).name('Zusätzl. Vorhersage (ms)').onFinishChange(persist);
 
 const effect = gui.addFolder('Effekt');
 const couplingCtl = effect.add(settings, 'headCoupling').name('Kopfkopplung (H)').onChange(persist);

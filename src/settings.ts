@@ -22,7 +22,14 @@ export interface Settings {
   filterMinCutoff: number;
   /** Cutoff increase per m/s of head speed. Higher = less lag on fast moves. */
   filterBeta: number;
-  /** Extrapolate the filtered head position by this many milliseconds to hide latency. */
+  /** Cutoff (Hz) of the speed estimate used for adaptation and prediction. */
+  filterDCutoff: number;
+  /**
+   * Extrapolate the head position from the camera capture time to the moment
+   * of rendering. Removes the camera/detection latency and the 30 fps stepping.
+   */
+  latencyCompensation: boolean;
+  /** Additional extrapolation on top, e.g. for display latency. */
   predictionMs: number;
 
   // Effect strength (1 = physically correct)
@@ -48,6 +55,8 @@ export const defaultSettings: Settings = {
   filterEnabled: true,
   filterMinCutoff: 1.5,
   filterBeta: 40,
+  filterDCutoff: 4,
+  latencyCompensation: true,
   predictionMs: 0,
   gainXY: 1,
   gainZ: 1,
@@ -56,7 +65,7 @@ export const defaultSettings: Settings = {
   showDebug: true,
 };
 
-const STORAGE_KEY = 'hcp-settings-v2';
+const STORAGE_KEY = 'hcp-settings-v3';
 
 export function loadSettings(): Settings {
   try {
