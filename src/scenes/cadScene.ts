@@ -151,7 +151,12 @@ export class CadScene implements DemoScene {
   layout(width: number, height: number): void {
     disposeChildren(this.ground);
     const scale = Math.min(width / 0.5, height / 0.3) * 0.85;
-    const floorY = -height * 0.33;
+    // Put the floor so the model's bounding box is vertically centred on the screen.
+    this.model.position.set(0, 0, 0);
+    this.model.scale.setScalar(scale);
+    this.model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(this.model);
+    const floorY = -(box.max.y - box.min.y) / 2 - box.min.y;
 
     // Invisible ground that only shows the soft shadow, so there is no hard
     // floor edge that gets cut off by the screen border.
@@ -165,7 +170,6 @@ export class CadScene implements DemoScene {
     this.ground.add(plane);
 
     this.model.position.set(0, floorY, -0.02);
-    this.model.scale.setScalar(scale);
     this.model.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.castShadow = true;
     });
