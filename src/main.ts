@@ -215,6 +215,23 @@ setup
     heightCtl.updateDisplay();
     persist();
   });
+/** Known displays: visible panel size in cm and camera position relative to the top edge. */
+const presets: Record<string, Pick<Settings, 'screenWidthCm' | 'screenHeightCm' | 'cameraAboveScreenCm'>> = {
+  // 2560 x 1664 px at 224 ppi. The camera sits in the notch, i.e. inside the panel area.
+  'MacBook Air 13" (M2–M4)': { screenWidthCm: 29.03, screenHeightCm: 18.87, cameraAboveScreenCm: -0.4 },
+};
+const preset = { name: '' };
+setup
+  .add(preset, 'name', ['', ...Object.keys(presets)])
+  .name('Gerät')
+  .onChange((v: string) => {
+    const p = presets[v];
+    if (!p) return;
+    Object.assign(settings, p);
+    diag.zoll = diagonalInches();
+    gui.controllersRecursive().forEach((c) => c.updateDisplay());
+    persist();
+  });
 const widthCtl = setup.add(settings, 'screenWidthCm', 10, 150, 0.1).name('Breite Bild (cm)').onFinishChange(persist);
 const heightCtl = setup.add(settings, 'screenHeightCm', 5, 100, 0.1).name('Höhe Bild (cm)').onFinishChange(persist);
 setup.add(settings, 'cameraAboveScreenCm', -5, 10, 0.1).name('Kamera über Bildkante (cm)').onFinishChange(persist);
