@@ -14,6 +14,8 @@ export interface Settings {
 
   // Input
   input: 'webcam' | 'mouse';
+  /** Requested camera mode, "WIDTHxHEIGHT@FPS". The browser may deliver less. */
+  cameraMode: string;
   eye: 'center' | 'left' | 'right';
 
   // Filtering
@@ -57,6 +59,7 @@ export const defaultSettings: Settings = {
   ipdCm: 6.3,
   compensateWindowPosition: true,
   input: 'webcam',
+  cameraMode: '1280x720@60',
   eye: 'center',
   filterEnabled: true,
   filterType: 'kalman',

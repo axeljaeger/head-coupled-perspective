@@ -29,6 +29,12 @@ export interface FaceObservation {
   landmarks: NormalizedLandmark[];
 }
 
+export interface CameraMode {
+  width: number;
+  height: number;
+  fps: number;
+}
+
 export type FaceListener = (obs: FaceObservation | null) => void;
 
 /** Webcam + MediaPipe Face Landmarker, delivering one observation per video frame. */
@@ -45,7 +51,12 @@ export class FaceTracker {
     this.video.muted = true;
   }
 
-  async start(): Promise<void> {
+  /** What the camera actually delivers (may differ from what was requested). */
+  get actualSettings(): MediaTrackSettings | null {
+    return this.stream?.getVideoTracks()[0]?.getSettings() ?? null;
+  }
+
+  async start(mode: CameraMode): Promise<void> {
     const base = import.meta.env.BASE_URL;
     const fileset = await FilesetResolver.forVisionTasks(`${base}mediapipe/wasm`);
     const options = (delegate: 'GPU' | 'CPU') => ({
@@ -61,14 +72,30 @@ export class FaceTracker {
       this.landmarker = await FaceLandmarker.createFromOptions(fileset, options('CPU'));
     }
 
+    await this.openCamera(mode);
+    this.running = true;
+    this.scheduleNext();
+  }
+
+  /** Switches resolution / frame rate while running. */
+  async setMode(mode: CameraMode): Promise<void> {
+    this.stream?.getTracks().forEach((t) => t.stop());
+    await this.openCamera(mode);
+    this.lastVideoTime = -1;
+  }
+
+  private async openCamera(mode: CameraMode): Promise<void> {
     this.stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 }, facingMode: 'user' },
+      video: {
+        width: { ideal: mode.width },
+        height: { ideal: mode.height },
+        frameRate: { ideal: mode.fps },
+        facingMode: 'user',
+      },
     });
     this.video.srcObject = this.stream;
     await this.video.play();
-    this.running = true;
-    this.scheduleNext();
   }
 
   stop(): void {

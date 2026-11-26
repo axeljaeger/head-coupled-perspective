@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { loadSettings, saveSettings, defaultSettings, type Settings } from './settings';
-import { FaceTracker, type FaceObservation } from './tracking/faceTracker';
+import { FaceTracker, type CameraMode, type FaceObservation } from './tracking/faceTracker';
 import { OneEuroFilter3 } from './tracking/oneEuroFilter';
 import { KalmanCV3 } from './tracking/kalmanFilter';
 import { calibrateHfov, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
@@ -20,6 +20,8 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const canvas = $<HTMLCanvasElement>('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 let demo: DemoScene | null = null;
@@ -206,7 +208,8 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
       `Tracking    ${num(fps(trackTimes), 0, 3)} fps, Erkennung ${num(lastObs.detectMs, 1, 5)} ms`,
       `Latenz      ${num(avg(pipelineLatency), 0, 4)} ms ${lastObs.hasCaptureTime ? 'ab Aufnahme' : 'ab Frame (geschätzt)'}`,
       `Alter       ${num(performance.now() - lastObsTime, 0, 4)} ms seit letztem Frame`,
-      `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight}, FOV ${settings.cameraHfovDeg.toFixed(1)}°`,
+      `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight} @ ${num(tracker?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
+      `Kamera-FOV  ${settings.cameraHfovDeg.toFixed(1)}°`,
       `Gierwinkel  ${num((lastObs.yaw * 180) / Math.PI, 1, 6)}°`,
       `Jitter roh  ${mm(stdDevMm(rawHistory))} mm`,
       `Jitter gef. ${mm(stdDevMm(filteredHistory))} mm`,
@@ -283,6 +286,17 @@ input
   .onChange(async (v: Settings['input']) => {
     persist();
     if (v === 'webcam') await startWebcam();
+  });
+input
+  .add(settings, 'cameraMode', ['640x480@30', '640x480@60', '1280x720@30', '1280x720@60', '1920x1080@30', '1920x1080@60'])
+  .name('Kamera-Modus')
+  .onChange(async () => {
+    persist();
+    if (tracker) {
+      await tracker.setMode(parseMode(settings.cameraMode));
+      kalman.reset();
+      oneEuro.reset();
+    }
   });
 input.add(settings, 'eye', { Mitte: 'center', 'Linkes Auge': 'left', 'Rechtes Auge': 'right' }).name('Auge').onFinishChange(persist);
 
@@ -408,11 +422,17 @@ window.addEventListener('keydown', (e) => {
 const startEl = $('start');
 const startError = $('start-error');
 
+function parseMode(m: string): CameraMode {
+  const match = /^(\d+)x(\d+)@(\d+)$/.exec(m);
+  if (!match) return { width: 1280, height: 720, fps: 60 };
+  return { width: +match[1], height: +match[2], fps: +match[3] };
+}
+
 async function startWebcam(): Promise<void> {
   if (tracker) return;
   tracker = new FaceTracker(onFace);
   try {
-    await tracker.start();
+    await tracker.start(parseMode(settings.cameraMode));
     settings.input = 'webcam';
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
   } catch (e) {

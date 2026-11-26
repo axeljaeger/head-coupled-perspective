@@ -68,24 +68,36 @@ export class CadScene implements DemoScene {
   readonly root = new THREE.Group();
   readonly background = 0xe9edf2;
   private model = new THREE.Group();
-  private grid = new THREE.Group();
+  private ground = new THREE.Group();
+  private sun = new THREE.DirectionalLight(0xffffff, 2.2);
   private lights = new THREE.Group();
   private dragging = false;
   private lastX = 0;
-  private lastY = 0;
-  private targetRot = new THREE.Euler(0.35, -0.5, 0);
+  // Only yaw is user-controlled; the model stands on the ground and the
+  // viewer's head provides the other viewpoints.
+  private targetYaw = -0.5;
 
   constructor(private readonly dom: HTMLElement) {
-    this.root.add(this.lights, this.grid, this.model);
+    this.root.add(this.lights, this.ground, this.model);
 
     this.lights.add(new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-    sun.position.set(0.4, 0.8, 0.6);
-    this.lights.add(sun);
+    // Light from almost straight above so the shadow sits under the model.
+    const sun = this.sun;
+    sun.position.set(-0.3, 1, 0.35);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.radius = 6;
+    sun.shadow.bias = -0.0005;
+    const sc = sun.shadow.camera;
+    sc.left = sc.bottom = -0.3;
+    sc.right = sc.top = 0.3;
+    sc.near = 0.1;
+    sc.far = 2;
+    this.lights.add(sun, sun.target);
 
-    const steel = new THREE.MeshStandardMaterial({ color: 0xa9b3bf, metalness: 0.6, roughness: 0.35 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, metalness: 0.25, roughness: 0.45 });
     const blue = new THREE.MeshStandardMaterial({ color: 0x3a6ea5, metalness: 0.2, roughness: 0.5 });
-    const brass = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.7, roughness: 0.3 });
+    const brass = new THREE.MeshStandardMaterial({ color: 0xc9a24a, metalness: 0.35, roughness: 0.4 });
 
     const plate = withEdges(new THREE.Mesh(plateWithHoles(0.24, 0.16, 0.012, 0.007), blue));
     this.model.add(plate);
@@ -126,36 +138,44 @@ export class CadScene implements DemoScene {
   private onDown = (e: PointerEvent) => {
     this.dragging = true;
     this.lastX = e.clientX;
-    this.lastY = e.clientY;
   };
   private onMove = (e: PointerEvent) => {
     if (!this.dragging) return;
-    this.targetRot.y += (e.clientX - this.lastX) * 0.01;
-    this.targetRot.x += (e.clientY - this.lastY) * 0.01;
+    this.targetYaw += (e.clientX - this.lastX) * 0.01;
     this.lastX = e.clientX;
-    this.lastY = e.clientY;
   };
   private onUp = () => {
     this.dragging = false;
   };
 
   layout(width: number, height: number): void {
-    disposeChildren(this.grid);
-    const floorY = -height / 2;
-    const size = Math.max(width, 0.8);
-    const g = new THREE.GridHelper(size, 40, 0x7d8794, 0xc3cad3);
-    g.position.set(0, floorY, -size / 2 + 0.1);
-    this.grid.add(g);
+    disposeChildren(this.ground);
+    const scale = Math.min(width / 0.5, height / 0.3) * 0.85;
+    const floorY = -height * 0.33;
 
-    // Model sits centred on the screen plane, slightly above the floor.
-    this.model.position.set(0, -height * 0.12, 0);
-    this.model.scale.setScalar(Math.min(width / 0.5, height / 0.3) * 0.85);
+    // Invisible ground that only shows the soft shadow, so there is no hard
+    // floor edge that gets cut off by the screen border.
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.5),
+      new THREE.ShadowMaterial({ opacity: 0.3 }),
+    );
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = floorY;
+    plane.receiveShadow = true;
+    this.ground.add(plane);
+
+    this.model.position.set(0, floorY, -0.02);
+    this.model.scale.setScalar(scale);
+    this.model.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+    });
+    this.sun.target.position.set(0, floorY, 0);
+    this.sun.position.set(-0.3, floorY + 1, 0.35);
   }
 
   update(dt: number): void {
     const k = 1 - Math.exp(-dt * 10);
-    this.model.rotation.x += (this.targetRot.x - this.model.rotation.x) * k;
-    this.model.rotation.y += (this.targetRot.y - this.model.rotation.y) * k;
+    this.model.rotation.y += (this.targetYaw - this.model.rotation.y) * k;
   }
 
   dispose(): void {

@@ -31,6 +31,13 @@ allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 4. Close one eye. With both eyes open, stereo vision tells your brain the
    screen is flat, which weakens the effect a lot.
 
+## Camera mode
+
+*Eingabe → Kamera-Modus* requests a resolution and frame rate (default
+1280×720 @ 60). The browser may deliver less; the debug overlay shows what the
+camera actually runs at. Switching to a different aspect ratio (e.g. 640×480)
+changes the field of view, so recalibrate the distance afterwards.
+
 ## Keys
 
 | Key | Action |
