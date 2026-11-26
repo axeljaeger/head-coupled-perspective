@@ -4,6 +4,8 @@ import type { Object3D } from 'three';
 export interface DemoScene {
   readonly root: Object3D;
   readonly background: number;
+  /** Far clipping distance in metres (default 20). */
+  readonly far?: number;
   /** Called whenever the physical size of the visible window changes. */
   layout(width: number, height: number): void;
   update(dtSeconds: number): void;

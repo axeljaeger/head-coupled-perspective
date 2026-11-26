@@ -19,10 +19,24 @@ Open the printed URL (http://localhost:5173), click **Webcam starten** and
 allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 `public/` and downloads the face landmarker model once (about 3.7 MB).
 
+### On an iPad (or another device on the network)
+
+```sh
+npm run dev:lan
+```
+
+serves over HTTPS on your local network (cameras need HTTPS). Open the
+"Network" URL on the iPad, accept the self-signed certificate warning, and use
+the iPad in landscape with the camera at the top. Adding the page to the home
+screen gives you a fullscreen view.
+
 ## Setup for a fair test
 
-1. Under **Aufbau**, enter the visible size of your screen (or just the
-   diagonal in inches) and how far the camera sits above the top edge.
+1. Pick your device under **Aufbau → Gerät**. The start screen suggests one
+   based on the screen size the browser reports (the exact model is not
+   available to web pages). Supported: MacBook Air 13"/15", MacBook Pro
+   14"/16", iPad Air 11". Otherwise enter the visible size of your screen (or
+   just the diagonal) and how far the camera sits above the top edge.
 2. Sit still, measure the distance from your eyes to the screen, enter it
    under *Gemessener Abstand* and press **Abstand kalibrieren**. This solves
    for the webcam's field of view so distances come out right.
@@ -47,7 +61,7 @@ changes the field of view, so recalibrate the distance afterwards.
 | <kbd>K</kbd> | Switch between One Euro and Kalman filter |
 | <kbd>F</kbd> | Fullscreen |
 | <kbd>D</kbd> | Debug overlay (camera image, eye position, fps, latency, jitter) |
-| <kbd>1</kbd> / <kbd>2</kbd> | Target box scene / CAD-like model (drag to rotate) |
+| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Target box / CAD-like model (drag to rotate) / window onto a landscape |
 
 ## What to look at
 

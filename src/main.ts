@@ -6,9 +6,11 @@ import { OneEuroFilter3 } from './tracking/oneEuroFilter';
 import { KalmanCV3 } from './tracking/kalmanFilter';
 import { calibrateHfov, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
 import { updateOffAxisCamera } from './projection/offAxis';
+import { detectDevice, devicePresets, type DevicePreset } from './devices';
 import type { DemoScene } from './scenes/types';
 import { TargetsScene } from './scenes/targetsScene';
 import { CadScene } from './scenes/cadScene';
+import { WindowScene } from './scenes/windowScene';
 
 /** Viewing distance used when head coupling is off and as the neutral point for gainZ. */
 const NEUTRAL_Z = 0.6;
@@ -24,7 +26,8 @@ const context = canvas.getContext('webgl2', {
   // Lets the browser show frames without waiting for the page compositor.
   desynchronized: settings.lowLatencyCanvas,
 }) as WebGL2RenderingContext;
-const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true });
+// Logarithmic depth keeps precision from 1 cm (window frame) to kilometres (mountains).
+const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -37,7 +40,7 @@ function setScene(name: Settings['scene']): void {
     scene.remove(demo.root);
     demo.dispose();
   }
-  demo = name === 'cad' ? new CadScene(canvas) : new TargetsScene();
+  demo = name === 'cad' ? new CadScene(canvas) : name === 'window' ? new WindowScene() : new TargetsScene();
   scene.add(demo.root);
   scene.background = new THREE.Color(demo.background);
   lastLayout = '';
@@ -247,23 +250,22 @@ setup
     heightCtl.updateDisplay();
     persist();
   });
-/** Known displays: visible panel size in cm and camera position relative to the top edge. */
-const presets: Record<string, Pick<Settings, 'screenWidthCm' | 'screenHeightCm' | 'cameraAboveScreenCm'>> = {
-  // 2560 x 1664 px at 224 ppi. The camera sits in the notch, i.e. inside the panel area.
-  'MacBook Air 13" (M2–M4)': { screenWidthCm: 29.03, screenHeightCm: 18.87, cameraAboveScreenCm: -0.4 },
-};
-const preset = { name: '' };
-setup
-  .add(preset, 'name', ['', ...Object.keys(presets)])
+const preset = { name: settings.deviceName };
+const presetCtl = setup
+  .add(preset, 'name', ['', ...devicePresets.map((d) => d.name)])
   .name('Gerät')
-  .onChange((v: string) => {
-    const p = presets[v];
-    if (!p) return;
-    Object.assign(settings, p);
-    diag.zoll = diagonalInches();
-    gui.controllersRecursive().forEach((c) => c.updateDisplay());
-    persist();
-  });
+  .onChange((v: string) => applyDevice(devicePresets.find((d) => d.name === v)));
+function applyDevice(d: DevicePreset | undefined): void {
+  if (!d) return;
+  settings.screenWidthCm = d.screenWidthCm;
+  settings.screenHeightCm = d.screenHeightCm;
+  settings.cameraAboveScreenCm = d.cameraAboveScreenCm;
+  settings.deviceName = d.name;
+  preset.name = d.name;
+  diag.zoll = diagonalInches();
+  gui.controllersRecursive().forEach((c) => c.updateDisplay());
+  persist();
+}
 const widthCtl = setup.add(settings, 'screenWidthCm', 10, 150, 0.1).name('Breite Bild (cm)').onFinishChange(persist);
 const heightCtl = setup.add(settings, 'screenHeightCm', 5, 100, 0.1).name('Höhe Bild (cm)').onFinishChange(persist);
 setup.add(settings, 'cameraAboveScreenCm', -5, 10, 0.1).name('Kamera über Bildkante (cm)').onFinishChange(persist);
@@ -370,7 +372,7 @@ const couplingCtl = effect.add(settings, 'headCoupling').name('Kopfkopplung (H)'
 effect.add(settings, 'gainXY', 0, 3, 0.05).name('Verstärkung x/y').onFinishChange(persist);
 effect.add(settings, 'gainZ', 0, 3, 0.05).name('Verstärkung z').onFinishChange(persist);
 const sceneCtl = effect
-  .add(settings, 'scene', { Zielscheiben: 'targets', 'CAD-Modell': 'cad' })
+  .add(settings, 'scene', { Zielscheiben: 'targets', 'CAD-Modell': 'cad', Fenster: 'window' })
   .name('Szene')
   .onChange((v: Settings['scene']) => {
     setScene(v);
@@ -432,7 +434,8 @@ window.addEventListener('keydown', (e) => {
       break;
     case '1':
     case '2':
-      settings.scene = e.key === '1' ? 'targets' : 'cad';
+    case '3':
+      settings.scene = e.key === '1' ? 'targets' : e.key === '2' ? 'cad' : 'window';
       sceneCtl.updateDisplay();
       setScene(settings.scene);
       persist();
@@ -483,6 +486,30 @@ $('start-mouse').addEventListener('click', () => {
   persist();
 });
 
+// Suggest a device preset; the user confirms, since the guess can be wrong.
+const detected = detectDevice();
+const suggestion = $('device-suggestion');
+if (detected && detected.preset.name !== settings.deviceName) {
+  const alt = detected.alternatives.length
+    ? ` (oder ${detected.alternatives.map((a) => a.name).join(', ')})`
+    : '';
+  const hint = detected.confidence === 'scaled' ? ' Die Bildschirmskalierung ist nicht die Standardeinstellung, daher unsicher.' : '';
+  suggestion.innerHTML = '';
+  const text = document.createElement('span');
+  text.textContent = `Erkannt: ${detected.preset.name}${alt}.${hint} `;
+  const btn = document.createElement('button');
+  btn.className = 'secondary';
+  btn.textContent = 'Übernehmen';
+  btn.onclick = () => {
+    applyDevice(detected.preset);
+    suggestion.textContent = `${detected.preset.name} übernommen.`;
+  };
+  suggestion.append(text, btn);
+} else if (settings.deviceName) {
+  suggestion.textContent = `Gerät: ${settings.deviceName}`;
+}
+void presetCtl;
+
 setScene(settings.scene);
 applyDebugVisibility();
 showFilterParams();
@@ -496,7 +523,7 @@ function frame(now: number): void {
   const vp = viewport();
   layoutIfNeeded(vp);
   const eye = currentEye(vp);
-  updateOffAxisCamera(camera, eye, vp.width, vp.height);
+  updateOffAxisCamera(camera, eye, vp.width, vp.height, 0.01, demo?.far ?? 20);
   demo?.update(dt);
   renderer.render(scene, camera);
   updateDebugText(eye, vp);

@@ -59,7 +59,7 @@ export class FaceTracker {
   constructor(
     private readonly onFace: FaceListener,
     /** Run detection in a Web Worker so it does not block rendering. */
-    readonly useWorker = true,
+    public useWorker = true,
   ) {
     this.video = document.createElement('video');
     this.video.playsInline = true;
@@ -74,8 +74,17 @@ export class FaceTracker {
   async start(mode: CameraMode): Promise<void> {
     const baseUrl = new URL(import.meta.env.BASE_URL, location.href).href;
     if (this.useWorker) {
-      await this.startWorker(baseUrl);
-    } else {
+      try {
+        await this.startWorker(baseUrl);
+      } catch (e) {
+        // Some browsers (older Safari) cannot run MediaPipe in a module worker.
+        console.warn('Worker detection failed, using main thread', e);
+        this.worker?.terminate();
+        this.worker = null;
+        this.useWorker = false;
+      }
+    }
+    if (!this.useWorker) {
       const created = await createLandmarker(baseUrl, false);
       this.landmarker = created.landmarker;
       this.delegate = created.delegate;

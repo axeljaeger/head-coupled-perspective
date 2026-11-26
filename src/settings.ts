@@ -1,6 +1,8 @@
 /** All user-tunable parameters. Lengths are in centimetres for the UI. */
 export interface Settings {
   // Physical setup
+  /** Name of the chosen device preset, '' for manual values. */
+  deviceName: string;
   screenWidthCm: number;
   screenHeightCm: number;
   /** Vertical distance from the top edge of the screen to the camera lens (positive = above). */
@@ -51,11 +53,12 @@ export interface Settings {
   headCoupling: boolean;
 
   // Presentation
-  scene: 'targets' | 'cad';
+  scene: 'targets' | 'cad' | 'window';
   showDebug: boolean;
 }
 
 export const defaultSettings: Settings = {
+  deviceName: '',
   screenWidthCm: 53.1,
   screenHeightCm: 29.9,
   cameraAboveScreenCm: 1.0,
