@@ -1,4 +1,4 @@
-import { eyeInScreenSpace, hfovFromDistance, ipdFromDistance } from './eyePosition.ts';
+import { estimateIpd, eyeInScreenSpace, hfovFromDistance, ipdFromDistance } from './eyePosition.ts';
 import { createFilter, type FilterOptions, type PointFilter } from './filters/index.ts';
 import type { FaceObservation, FaceSource } from './observation.ts';
 import { MediaPipeFaceSource, type MediaPipeAssets, type CameraMode } from './sources/mediapipe.ts';
@@ -184,6 +184,33 @@ export class HeadTracker {
     return ipd;
   }
 
+  /**
+   * Measures the viewer's IPD from the iris size, without a tape measure:
+   * the viewer looks straight at the camera for `durationMs`. Sets and
+   * returns the median. Rejects if the source gives no iris size or too few
+   * frames had a face.
+   */
+  measureIpd(options: { durationMs?: number; minSamples?: number } = {}): Promise<number> {
+    const { durationMs = 3000, minSamples = 20 } = options;
+    const samples: number[] = [];
+    const unsubscribe = this.subscribe(({ observation }) => {
+      const ipd = observation && estimateIpd(observation);
+      if (ipd) samples.push(ipd);
+    });
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        unsubscribe();
+        if (samples.length < minSamples) {
+          reject(new Error(`Only ${samples.length} IPD samples, need ${minSamples}`));
+          return;
+        }
+        const ipd = median(samples);
+        this.setViewer({ ipd });
+        resolve(ipd);
+      }, durationMs);
+    });
+  }
+
   private onObservation(obs: FaceObservation | null): void {
     if (!obs) {
       this.faceVisible = false;
@@ -203,4 +230,9 @@ export class HeadTracker {
   private emit(update: TrackingUpdate): void {
     for (const l of this.listeners) l(update);
   }
+}
+
+function median(values: number[]): number {
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
 }

@@ -64,3 +64,18 @@ export function hfovFromDistance(obs: FaceObservation, viewer: Pick<ViewerGeomet
 export function ipdFromDistance(obs: FaceObservation, camera: CameraIntrinsics, distance: number): number {
   return (distance * ipdPx(obs)) / focalLengthPx(obs.imageWidth, camera.hfovDeg);
 }
+
+/** Average horizontal visible iris diameter of adults, metres (about 11.7 mm, low spread). */
+export const IRIS_DIAMETER = 0.0117;
+
+/**
+ * Estimates the viewer's interpupillary distance from the ratio of eye
+ * distance to iris size in the image. Independent of camera FOV and viewing
+ * distance. Returns metres, or `null` if the observation has no iris size.
+ * Single frames are noisy; take the median over a few seconds, see
+ * {@link HeadTracker.measureIpd}.
+ */
+export function estimateIpd(obs: FaceObservation): number | null {
+  if (!obs.irisDiameterPx) return null;
+  return (IRIS_DIAMETER * ipdPx(obs)) / obs.irisDiameterPx;
+}

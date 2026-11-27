@@ -27,6 +27,11 @@ export interface FaceObservation {
   subjectRightPx: [number, number];
   /** Head yaw in radians (0 = facing the camera). Used to correct the eye distance. */
   yaw: number;
+  /**
+   * Mean visible iris diameter in image pixels, if the detector provides
+   * iris landmarks. Enables the tape-measure-free IPD estimate.
+   */
+  irisDiameterPx?: number;
   /** Detector-specific extras, e.g. the full landmark set for a debug view. */
   landmarks?: ReadonlyArray<{ x: number; y: number; z?: number }>;
 }

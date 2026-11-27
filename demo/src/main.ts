@@ -8,6 +8,7 @@ import {
   detectDevice,
   devicePresets,
   displayFromDiagonal,
+  estimateIpd,
   type CameraMode,
   type DevicePreset,
   type DisplayGeometry,
@@ -87,6 +88,12 @@ let lastObsTime = 0;
 const pipelineLatency: number[] = [];
 let tracking = false;
 const rawHistory: Vec3[] = [];
+/** Running iris-based IPD estimates (cm) for the debug overlay. */
+const ipdSamples: number[] = [];
+const median = (a: number[]) => {
+  const s = [...a].sort((x, y) => x - y);
+  return s.length ? s[Math.floor(s.length / 2)] : 0;
+};
 const filteredHistory: Vec3[] = [];
 const trackTimes: number[] = [];
 
@@ -129,6 +136,8 @@ function onUpdate(obs: FaceObservation | null, raw: Vec3 | null, filtered: Vec3 
   lastObs = obs;
   lastObsTime = obs.timestamp;
   push(pipelineLatency, performance.now() - obs.captureTime, 30);
+  const ipdEstimate = estimateIpd(obs);
+  if (ipdEstimate) push(ipdSamples, ipdEstimate * 100, 90);
   push(rawHistory, raw, 30);
   push(filteredHistory, filtered, 30);
   push(trackTimes, obs.timestamp, 30);
@@ -235,6 +244,7 @@ function updateDebugText(eyeAbs: Vec3, vp: ScreenRect): void {
       `Kamera      ${lastObs.imageWidth}x${lastObs.imageHeight} @ ${num(source?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
       `Kamera-FOV  ${settings.cameraHfovDeg.toFixed(1)}°`,
       `Gierwinkel  ${num((lastObs.yaw * 180) / Math.PI, 1, 6)}°`,
+      `Augenabst.  ${num(settings.ipdCm, 2, 5)} cm, Iris-Schätzung ${num(median(ipdSamples), 2, 5)} cm`,
       `Jitter roh  ${mm(stdDevMm(rawHistory))} mm`,
       `Jitter gef. ${mm(stdDevMm(filteredHistory))} mm`,
     );
@@ -283,7 +293,28 @@ const widthCtl = setup.add(settings, 'screenWidthCm', 10, 150, 0.1).name('Breite
 const heightCtl = setup.add(settings, 'screenHeightCm', 5, 100, 0.1).name('Höhe Bild (cm)').onFinishChange(persist);
 setup.add(settings, 'cameraAboveScreenCm', -5, 10, 0.1).name('Kamera über Bildkante (cm)').onFinishChange(persist);
 const fovCtl = setup.add(settings, 'cameraHfovDeg', 30, 120, 0.1).name('Kamera-FOV horiz. (°)').onFinishChange(persist);
-setup.add(settings, 'ipdCm', 5, 7.5, 0.05).name('Augenabstand (cm)').onFinishChange(persist);
+const ipdCtl = setup.add(settings, 'ipdCm', 5, 7.5, 0.05).name('Augenabstand (cm)').onFinishChange(persist);
+setup
+  .add(
+    {
+      measureIpd: async () => {
+        if (!tracker) return alertInDebug('Erst die Webcam starten.');
+        alertInDebug('Augenabstand wird gemessen: 3 s geradeaus in die Kamera schauen …');
+        syncTracker();
+        try {
+          const ipd = await tracker.measureIpd({ durationMs: 3000 });
+          settings.ipdCm = +(ipd * 100).toFixed(2);
+          ipdCtl.updateDisplay();
+          persist();
+          alertInDebug(`Augenabstand gemessen: ${settings.ipdCm.toFixed(2)} cm`);
+        } catch {
+          alertInDebug('Zu wenig Messwerte, bitte wiederholen.');
+        }
+      },
+    },
+    'measureIpd',
+  )
+  .name('Augenabstand messen (Iris)');
 setup.add(settings, 'compensateWindowPosition').name('Fensterposition beachten').onFinishChange(persist);
 const calib = {
   abstandCm: 60,

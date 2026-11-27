@@ -4,9 +4,15 @@ Head-coupled perspective (HCP) for the browser, written in TypeScript. The
 webcam estimates where your eyes are, and the 3D scene is rendered with an
 off-axis projection so the monitor behaves like a window into the scene.
 
-This is currently an **evaluation prototype**. The question it should answer:
-is the effect convincing on a desktop with a plain webcam? Only if it is will
-it be turned into a reusable library.
+The repository has two parts:
+
+- [`packages/head-coupled-perspective`](packages/head-coupled-perspective):
+  the library (webcam head tracking, smoothing, device presets, off-axis
+  projection, optional three.js adapter). Framework-agnostic, prepared for
+  npm but not published yet. See its README for the API.
+- [`demo`](demo): the evaluation app (target box, CAD model, window scene)
+  built on the library. The question it answers: is the effect convincing on
+  a desktop with a plain webcam?
 
 ## Run it
 
@@ -17,7 +23,17 @@ npm run dev
 
 Open the printed URL (http://localhost:5173), click **Webcam starten** and
 allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
-`public/` and downloads the face landmarker model once (about 3.7 MB).
+`demo/public/` and downloads the face landmarker model once (about 3.7 MB).
+
+### Follow the branch while it is being worked on
+
+```sh
+npm run follow          # or: npm run follow -- lan
+```
+
+starts the demo dev server and fast-forwards the checkout to new commits on the
+remote branch every 5 seconds. The page reloads by itself; settings are kept
+in localStorage. Local changes are never overwritten.
 
 ### On an iPad (or another device on the network)
 
@@ -37,12 +53,24 @@ screen gives you a fullscreen view.
    available to web pages). Supported: MacBook Air 13"/15", MacBook Pro
    13"/14"/15"/16", iPad Air 11". Otherwise enter the visible size of your screen (or
    just the diagonal) and how far the camera sits above the top edge.
-2. Sit still, measure the distance from your eyes to the screen, enter it
+2. Press **Augenabstand messen (Iris)** and look straight at the camera for
+   three seconds. Your eye distance is estimated from its ratio to the iris
+   diameter, which is nearly the same for all adults (about 11.7 mm). This
+   sets the scale of sideways and vertical parallax and needs no tape measure.
+3. For depth, measure the distance from your eyes to the screen once, enter it
    under *Gemessener Abstand* and press **Abstand kalibrieren**. This solves
-   for the webcam's field of view so distances come out right.
-3. Press <kbd>F</kbd> for fullscreen. In windowed mode the window position is
+   for the webcam's field of view. Without a tape measure, use the target box
+   (scene 1): lean in and out and adjust *Kamera-FOV* until the targets stay
+   put in space instead of swimming towards or away from you.
+
+Why not a purely visual "line up two markers" calibration: everything on the
+screen is rendered from the *estimated* eye position, so virtual markers line
+up whenever the estimate says they should, right or wrong. Only something
+physical (iris size, a measured distance, or your perception of objects
+staying still) can reveal the error.
+4. Press <kbd>F</kbd> for fullscreen. In windowed mode the window position is
    taken into account, but browser chrome can make it slightly off.
-4. Close one eye. With both eyes open, stereo vision tells your brain the
+5. Close one eye. With both eyes open, stereo vision tells your brain the
    screen is flat, which weakens the effect a lot.
 
 ## Camera mode
@@ -85,15 +113,31 @@ changes the field of view, so recalibrate the distance afterwards.
 
 ## How it works
 
-- `src/tracking/faceTracker.ts`: webcam + MediaPipe Face Landmarker, eye
-  centres from the eye-corner landmarks, head yaw from the face transform.
-- `src/tracking/headPose.ts`: pinhole back-projection to a metric eye
-  position in screen space; depth from the interpupillary distance in pixels
-  (yaw-corrected).
-- `src/tracking/oneEuroFilter.ts`: smoothing.
-- `src/projection/offAxis.ts`: asymmetric frustum with the physical screen as
-  the window ("generalized perspective projection").
-- `src/scenes/`: demo scenes in screen space (metres, screen plane at z = 0).
+Library (`packages/head-coupled-perspective/src`):
+
+- `sources/mediapipe.ts`: webcam + MediaPipe Face Landmarker, eye centres
+  from the eye-corner landmarks, iris size, head yaw from the face transform.
+- `eyePosition.ts`: pinhole back-projection to a metric eye position in screen
+  space; depth from the interpupillary distance in pixels (yaw-corrected);
+  IPD estimate from the iris size.
+- `filters/`: Kalman (constant velocity, default) and One Euro smoothing.
+- `tracker.ts`: ties source, estimate, filter and latency compensation together.
+- `offAxis.ts`, `three.ts`: asymmetric frustum with the physical screen as the
+  window ("generalized perspective projection"), plain and for three.js.
+
+Demo (`demo/src`): settings UI, debug overlay, and scenes in screen space
+(metres, screen plane at z = 0).
+
+## Library development
+
+```sh
+npm test            # unit tests of the library (node --test)
+npm run typecheck   # library and demo
+npm run build:lib   # ESM + .d.ts into packages/head-coupled-perspective/dist
+```
+
+The demo imports the library from source (Vite alias and TS paths), so edits
+to the library hot-reload without a build step.
 
 Prior art: Johnny Lee's Wii Remote head tracking demo (2007), which used two
 IR LEDs on glasses and the Wii Remote's IR camera.

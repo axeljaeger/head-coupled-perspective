@@ -6,6 +6,9 @@ import type { FaceListener, FaceObservation, FaceSource } from '../observation.t
 // "Subject right" is the eye that appears on the left of the (unmirrored) image.
 const SUBJECT_RIGHT_EYE = [33, 133];
 const SUBJECT_LEFT_EYE = [362, 263];
+// Iris contour landmarks (pairs of opposite points around each iris centre).
+const IRIS_PAIRS_RIGHT = [[469, 471], [470, 472]];
+const IRIS_PAIRS_LEFT = [[474, 476], [475, 477]];
 
 /** MediaPipe Tasks Vision version the default asset URLs point to. */
 export const MEDIAPIPE_VERSION = '1.2.3';
@@ -180,6 +183,11 @@ export class MediaPipeFaceSource implements FaceSource {
       }
       return [(x / ids.length) * w, (y / ids.length) * h];
     };
+    // Per eye, the larger of the two contour diameters is the one least
+    // shortened by head rotation or eyelids.
+    const dist = (a: number, b: number) => Math.hypot((lm[a].x - lm[b].x) * w, (lm[a].y - lm[b].y) * h);
+    const iris = (pairs: number[][]) => Math.max(...pairs.map(([a, b]) => dist(a, b)));
+    const irisDiameterPx = lm.length >= 478 ? (iris(IRIS_PAIRS_RIGHT) + iris(IRIS_PAIRS_LEFT)) / 2 : undefined;
     // Column-major 4x4; third column is the face's forward axis.
     const m = result.facialTransformationMatrixes?.[0]?.data;
     const yaw = m && m.length === 16 ? Math.atan2(m[8], m[10]) : 0;
@@ -193,6 +201,7 @@ export class MediaPipeFaceSource implements FaceSource {
       subjectLeftPx: centre(SUBJECT_LEFT_EYE),
       subjectRightPx: centre(SUBJECT_RIGHT_EYE),
       yaw,
+      irisDiameterPx,
       landmarks: lm,
     };
   }

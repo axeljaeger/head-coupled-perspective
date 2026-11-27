@@ -92,3 +92,11 @@ test('kalman estimates velocity of a linear motion', () => {
   for (let i = 0; i < 90; i++) f.filter([0.2 * (i / 30), 0, 0.6], i / 30);
   close(f.derivative()[0], 0.2, 0.01);
 });
+
+test('iris-based IPD estimate', async () => {
+  const { estimateIpd, IRIS_DIAMETER } = await import('../src/eyePosition.ts');
+  const obs = observe([0, 0, 0.6]);
+  assert.equal(estimateIpd(obs), null);
+  const f = focalLengthPx(obs.imageWidth, camera.hfovDeg);
+  close(estimateIpd({ ...obs, irisDiameterPx: (IRIS_DIAMETER * f) / 0.6 })!, viewer.ipd);
+});
