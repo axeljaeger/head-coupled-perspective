@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { DemoScene } from './types';
-import { disposeChildren } from './targetsScene';
 
 /** Outline drawn on top of a mesh, the way CAD viewers show model edges. */
 function withEdges(mesh: THREE.Mesh, color = 0x1b1f24): THREE.Mesh {
@@ -59,21 +58,14 @@ function gearGeometry(teeth: number, rRoot: number, rTip: number, width: number,
   return g;
 }
 
-/** Depth of the room behind the glass, metres. */
-const ROOM_DEPTH = 0.6;
-/** Grid spacing on the room surfaces, metres (like a CAD floor grid). */
-const GRID = 0.05;
-
 /**
- * A small mechanical assembly floating in front of the screen, with a room
- * behind the glass as reference.
+ * A small mechanical assembly floating in front of the screen on a plain
+ * background, with nothing else in the scene to distract from the effect.
  *
  * An object right at the glass (z = 0) has no parallax against the screen
  * frame: it only turns with the head and seems glued to the screen centre.
  * Placed in front of the glass, it shifts against the head movement relative
- * to the frame and appears to come out of the screen. The room, whose walls
- * start exactly at the screen edges, ties the virtual space to the physical
- * frame, and the model's shadow on the room shows how far it floats in front.
+ * to the frame and appears to come out of the screen.
  * The model is kept small so it is never cut off by the screen edge, which
  * would break the illusion. Drag with the mouse to rotate.
  */
@@ -81,7 +73,6 @@ export class CadScene implements DemoScene {
   readonly root = new THREE.Group();
   readonly background = 0xe9edf2;
   private model = new THREE.Group();
-  private ground = new THREE.Group();
   private sun = new THREE.DirectionalLight(0xffffff, 2.2);
   private lights = new THREE.Group();
   private dragging = false;
@@ -91,27 +82,15 @@ export class CadScene implements DemoScene {
   private targetYaw = -0.5;
   /** Position of the model's centre: > 0 in front of the glass (pops out), < 0 behind. Metres. */
   modelZ = 0.08;
-  /** Show the room (floor, walls, grid) behind the glass. */
-  showRoom = true;
 
   constructor(private readonly dom: HTMLElement) {
-    this.root.add(this.lights, this.ground, this.model);
+    this.root.add(this.lights, this.model);
     // Start at the target angle so nothing animates when the scene opens.
     this.model.rotation.y = this.targetYaw;
 
     this.lights.add(new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.6));
-    // Light from almost straight above so the shadow sits under the model.
     const sun = this.sun;
-    sun.position.set(-0.3, 1, 0.35);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.radius = 6;
-    sun.shadow.bias = -0.0005;
-    const sc = sun.shadow.camera;
-    sc.left = sc.bottom = -0.3;
-    sc.right = sc.top = 0.3;
-    sc.near = 0.1;
-    sc.far = 2;
+    sun.position.set(-0.3, 1, 0.8);
     this.lights.add(sun, sun.target);
 
     const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, metalness: 0.25, roughness: 0.45 });
@@ -168,7 +147,6 @@ export class CadScene implements DemoScene {
   };
 
   layout(width: number, height: number): void {
-    disposeChildren(this.ground);
     const z = this.modelZ;
     const eyeZ = 0.6;
     // The model appears larger the closer it comes, by eyeZ / (eyeZ - z).
@@ -180,88 +158,9 @@ export class CadScene implements DemoScene {
     this.model.scale.setScalar(scale);
     this.model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.model);
-    const modelH = box.max.y - box.min.y;
-
-    if (this.showRoom) this.buildRoom(width, height);
-    else {
-      // Shadow-only back plane as the only reference.
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), new THREE.ShadowMaterial({ opacity: 0.3 }));
-      plane.position.set(0, 0, -ROOM_DEPTH);
-      plane.receiveShadow = true;
-      this.ground.add(plane);
-    }
-
-    // Vertically centred, slightly below the middle so its shadow lands on the floor.
-    this.model.position.set(0, -modelH / 2 - box.min.y - height * 0.05, z);
-    this.model.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
-    });
-    // Light from above and in front, so the shadow falls back onto the floor
-    // and the back wall of the room and shows how far the model floats.
-    this.sun.target.position.set(0, -height / 4, -ROOM_DEPTH);
-    this.sun.position.set(-0.2, height / 2 + 0.4, z + 0.8);
-    const sc = this.sun.shadow.camera;
-    const extent = Math.max(width, height, ROOM_DEPTH) * 1.5;
-    sc.left = sc.bottom = -extent;
-    sc.right = sc.top = extent;
-    sc.far = 4;
-    sc.updateProjectionMatrix();
-  }
-
-  /** Floor, walls, ceiling and back wall behind the glass, flush with the screen edges. */
-  private buildRoom(width: number, height: number): void {
-    const w = width / 2;
-    const h = height / 2;
-    const d = ROOM_DEPTH;
-    // Partly self-lit, so walls and ceiling stay light and only the shadow stands out.
-    const surface = (color: number) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0, emissive: color, emissiveIntensity: 0.55 });
-    const add = (geo: THREE.PlaneGeometry, mat: THREE.Material, pos: THREE.Vector3, rot: THREE.Euler) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.copy(pos);
-      m.rotation.copy(rot);
-      m.receiveShadow = true;
-      this.ground.add(m);
-    };
-    const floor = surface(0xdfe4ea);
-    const wall = surface(0xe9edf2);
-    add(new THREE.PlaneGeometry(width, d), floor, new THREE.Vector3(0, -h, -d / 2), new THREE.Euler(-Math.PI / 2, 0, 0));
-    add(new THREE.PlaneGeometry(width, d), wall, new THREE.Vector3(0, h, -d / 2), new THREE.Euler(Math.PI / 2, 0, 0));
-    add(new THREE.PlaneGeometry(d, height), wall, new THREE.Vector3(-w, 0, -d / 2), new THREE.Euler(0, Math.PI / 2, 0));
-    add(new THREE.PlaneGeometry(d, height), wall, new THREE.Vector3(w, 0, -d / 2), new THREE.Euler(0, -Math.PI / 2, 0));
-    add(new THREE.PlaneGeometry(width, height), wall, new THREE.Vector3(0, 0, -d), new THREE.Euler());
-
-    // Grid lines: strong on the floor, faint on walls, slightly off the
-    // surfaces to avoid z-fighting.
-    const e = 0.0005;
-    const floorPts: number[] = [];
-    const wallPts: number[] = [];
-    for (let x = 0; x <= w + 1e-6; x += GRID) {
-      for (const sx of x === 0 ? [0] : [-x, x]) {
-        floorPts.push(sx, -h + e, 0, sx, -h + e, -d);
-        wallPts.push(sx, h - e, 0, sx, h - e, -d, sx, -h, -d + e, sx, h, -d + e);
-      }
-    }
-    for (let zz = 0; zz <= d + 1e-6; zz += GRID) {
-      floorPts.push(-w, -h + e, -zz, w, -h + e, -zz);
-      wallPts.push(-w + e, -h, -zz, -w + e, h, -zz, w - e, -h, -zz, w - e, h, -zz, -w, h - e, -zz, w, h - e, -zz);
-    }
-    for (let y = -h; y <= h + 1e-6; y += GRID) {
-      wallPts.push(-w + e, y, 0, -w + e, y, -d, w - e, y, 0, w - e, y, -d, -w, y, -d + e, w, y, -d + e);
-    }
-    const lines = (pts: number[], color: number, opacity: number) => {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
-    };
-    this.ground.add(lines(floorPts, 0x8b96a3, 0.7), lines(wallPts, 0xa7b0ba, 0.45));
-
-    // Darker edges where the room meets the screen frame and in its corners.
-    const edgePts = [
-      -w, -h, 0, -w, -h, -d, w, -h, 0, w, -h, -d, -w, h, 0, -w, h, -d, w, h, 0, w, h, -d,
-      -w, -h, -d, w, -h, -d, w, -h, -d, w, h, -d, w, h, -d, -w, h, -d, -w, h, -d, -w, -h, -d,
-    ];
-    this.ground.add(lines(edgePts, 0x5d6772, 0.9));
+    // Centred on the screen, at depth z.
+    this.model.position.set(0, -(box.min.y + box.max.y) / 2, z);
+    this.sun.target.position.set(0, 0, z);
   }
 
   update(dt: number): void {

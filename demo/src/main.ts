@@ -40,8 +40,6 @@ const context = canvas.getContext('webgl2', {
 // Logarithmic depth keeps precision from 1 cm (window frame) to kilometres (mountains).
 const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 let demo: DemoScene | null = null;
@@ -61,7 +59,6 @@ function setScene(name: Settings['scene']): void {
 function applyCadSettings(): void {
   if (!(demo instanceof CadScene)) return;
   demo.modelZ = settings.cadZCm / 100;
-  demo.showRoom = settings.cadRoom;
   lastLayout = '';
 }
 
@@ -422,13 +419,6 @@ const sceneCtl = effect
 effect
   .add(settings, 'cadZCm', -30, 25, 1)
   .name('CAD: Position z (cm, + = vor dem Schirm)')
-  .onChange(() => {
-    applyCadSettings();
-    persist();
-  });
-effect
-  .add(settings, 'cadRoom')
-  .name('CAD: Raum hinter dem Schirm')
   .onChange(() => {
     applyCadSettings();
     persist();
