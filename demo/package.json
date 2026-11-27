@@ -10,7 +10,6 @@
     "dev": "vite",
     "predev:lan": "npm run assets",
     "dev:lan": "vite --mode lan",
-    "follow": "node scripts/follow.mjs",
     "prebuild": "npm run assets",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

@@ -25,16 +25,6 @@ Open the printed URL (http://localhost:5173), click **Webcam starten** and
 allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 `demo/public/` and downloads the face landmarker model once (about 3.7 MB).
 
-### Follow the branch while it is being worked on
-
-```sh
-npm run follow          # or: npm run follow -- lan
-```
-
-starts the demo dev server and fast-forwards the checkout to new commits on the
-remote branch every 5 seconds. The page reloads by itself; settings are kept
-in localStorage. Local changes are never overwritten.
-
 ### On an iPad (or another device on the network)
 
 ```sh
