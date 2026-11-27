@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@mediapipe/tasks-vision": "^1.2.3",
-    "@types/node": "^22.20.7",
+    "@types/node": "^26.6.6",
     "@types/three": "^0.187.0",
     "three": "^0.187.0",
     "typescript": "^7.0.2"
