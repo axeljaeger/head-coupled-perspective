@@ -1,33 +1,18 @@
 {
-  "name": "head-coupled-perspective",
-  "version": "0.1.0",
+  "name": "head-coupled-perspective-workspace",
   "private": true,
-  "description": "Head-coupled perspective (HCP) for the browser, written in TypeScript.",
   "type": "module",
+  "workspaces": ["packages/head-coupled-perspective", "demo"],
   "scripts": {
-    "assets": "node scripts/fetch-assets.mjs",
-    "predev": "npm run assets",
-    "dev": "vite",
-    "predev:lan": "npm run assets",
-    "dev:lan": "vite --mode lan",
-    "prebuild": "npm run assets",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "build:lib": "npm run build -w head-coupled-perspective",
+    "dev": "npm run build:lib && npm run dev -w demo",
+    "dev:lan": "npm run build:lib && npm run dev:lan -w demo",
+    "build": "npm run build:lib && npm run build -w demo",
+    "test": "npm test -w head-coupled-perspective",
+    "typecheck": "npm run typecheck --workspaces"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/axeljaeger/head-coupled-perspective.git"
-  },
-  "dependencies": {
-    "@mediapipe/tasks-vision": "^1.2.3",
-    "lil-gui": "^0.21.0",
-    "three": "^0.187.0"
-  },
-  "devDependencies": {
-    "@types/three": "^0.187.0",
-    "@vitejs/plugin-basic-ssl": "^2.3.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.4.0"
   }
 }

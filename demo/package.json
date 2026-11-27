@@ -1,0 +1,30 @@
+{
+  "name": "demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Evaluation demo for the head-coupled-perspective library.",
+  "type": "module",
+  "scripts": {
+    "assets": "node scripts/fetch-assets.mjs",
+    "predev": "npm run assets",
+    "dev": "vite",
+    "predev:lan": "npm run assets",
+    "dev:lan": "vite --mode lan",
+    "prebuild": "npm run assets",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3",
+    "head-coupled-perspective": "*",
+    "lil-gui": "^0.21.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.4.0"
+  }
+}

@@ -1,3 +1,6 @@
+import type { Vec3 } from '../types.ts';
+import type { PointFilter } from './types.ts';
+
 /**
  * Constant-velocity Kalman filter for one axis. State is [position, velocity];
  * the process noise models random (white) acceleration of the head.
@@ -10,13 +13,15 @@ export class KalmanCV1D {
   private b = 0;
   private c = 1;
   private lastT: number | null = null;
+  /** Standard deviation of head acceleration, units/s². */
+  accelStd: number;
+  /** Standard deviation of the measurement noise, units. */
+  measStd: number;
 
-  constructor(
-    /** Standard deviation of head acceleration, units/s². */
-    public accelStd = 3,
-    /** Standard deviation of the measurement noise, units. */
-    public measStd = 0.002,
-  ) {}
+  constructor(accelStd = 3, measStd = 0.002) {
+    this.accelStd = accelStd;
+    this.measStd = measStd;
+  }
 
   get derivative(): number {
     return this.v;
@@ -65,7 +70,7 @@ export class KalmanCV1D {
 }
 
 /** Three independent constant-velocity Kalman filters for a 3D point. */
-export class KalmanCV3 {
+export class KalmanCV3 implements PointFilter {
   readonly fx = new KalmanCV1D();
   readonly fy = new KalmanCV1D();
   readonly fz = new KalmanCV1D();
@@ -83,11 +88,11 @@ export class KalmanCV3 {
     this.fz.reset();
   }
 
-  filter(p: [number, number, number], t: number): [number, number, number] {
+  filter(p: Vec3, t: number): Vec3 {
     return [this.fx.filter(p[0], t), this.fy.filter(p[1], t), this.fz.filter(p[2], t)];
   }
 
-  derivative(): [number, number, number] {
+  derivative(): Vec3 {
     return [this.fx.derivative, this.fy.derivative, this.fz.derivative];
   }
 }

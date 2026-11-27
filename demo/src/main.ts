@@ -1,12 +1,22 @@
 import * as THREE from 'three';
 import GUI from 'lil-gui';
 import { loadSettings, saveSettings, defaultSettings, type Settings } from './settings';
-import { FaceTracker, type CameraMode, type FaceObservation } from './tracking/faceTracker';
-import { OneEuroFilter3 } from './tracking/oneEuroFilter';
-import { KalmanCV3 } from './tracking/kalmanFilter';
-import { calibrateHfov, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
-import { updateOffAxisCamera } from './projection/offAxis';
-import { detectDevice, devicePresets, type DevicePreset } from './devices';
+import {
+  HeadTracker,
+  MediaPipeFaceSource,
+  browserViewport,
+  detectDevice,
+  devicePresets,
+  displayFromDiagonal,
+  type CameraMode,
+  type DevicePreset,
+  type DisplayGeometry,
+  type FaceObservation,
+  type FilterOptions,
+  type ScreenRect,
+  type Vec3,
+} from 'head-coupled-perspective';
+import { applyOffAxis } from 'head-coupled-perspective/three';
 import type { DemoScene } from './scenes/types';
 import { TargetsScene } from './scenes/targetsScene';
 import { CadScene } from './scenes/cadScene';
@@ -46,25 +56,21 @@ function setScene(name: Settings['scene']): void {
   lastLayout = '';
 }
 
-/** Physical size of the browser viewport and its centre relative to the screen centre, metres. */
-function viewport() {
-  const pxToM = settings.screenWidthCm / 100 / screen.width;
-  const width = innerWidth * pxToM;
-  const height = innerHeight * pxToM;
-  let cx = 0;
-  let cy = 0;
-  if (settings.compensateWindowPosition) {
-    // Browser chrome is assumed to sit above the content area.
-    const leftPx = screenX + (outerWidth - innerWidth) / 2;
-    const topPx = screenY + (outerHeight - innerHeight);
-    cx = (leftPx + innerWidth / 2 - screen.width / 2) * pxToM;
-    cy = -(topPx + innerHeight / 2 - screen.height / 2) * pxToM;
-  }
-  return { width, height, cx, cy };
+/** The UI keeps lengths in centimetres; the library works in metres. */
+function display(): DisplayGeometry {
+  return {
+    width: settings.screenWidthCm / 100,
+    height: settings.screenHeightCm / 100,
+    cameraOffsetY: settings.cameraAboveScreenCm / 100,
+  };
+}
+
+function viewport(): ScreenRect {
+  return browserViewport(display(), { compensateWindowPosition: settings.compensateWindowPosition });
 }
 
 let lastLayout = '';
-function layoutIfNeeded(vp: ReturnType<typeof viewport>): void {
+function layoutIfNeeded(vp: ScreenRect): void {
   const key = `${vp.width.toFixed(4)}x${vp.height.toFixed(4)}`;
   if (key !== lastLayout && demo) {
     demo.layout(vp.width, vp.height);
@@ -74,28 +80,47 @@ function layoutIfNeeded(vp: ReturnType<typeof viewport>): void {
 }
 
 // ---------------------------------------------------------------- tracking
-const oneEuro = new OneEuroFilter3();
-const kalman = new KalmanCV3();
-let filter: OneEuroFilter3 | KalmanCV3 = oneEuro;
-function selectFilter(): void {
-  const next = settings.filterType === 'kalman' ? kalman : oneEuro;
-  if (next !== filter) next.reset();
-  filter = next;
-  oneEuro.configure(settings.filterMinCutoff, settings.filterBeta, settings.filterDCutoff);
-  kalman.configure(settings.kalmanAccel, settings.kalmanNoiseXYmm / 1000, settings.kalmanNoiseZmm / 1000);
-}
-let filtered: Vec3 | null = null;
+let source: MediaPipeFaceSource | null = null;
+let tracker: HeadTracker | null = null;
 let lastObs: FaceObservation | null = null;
 let lastObsTime = 0;
-let lastCaptureTime = 0;
 const pipelineLatency: number[] = [];
 let tracking = false;
 const rawHistory: Vec3[] = [];
 const filteredHistory: Vec3[] = [];
 const trackTimes: number[] = [];
 
-function onFace(obs: FaceObservation | null): void {
-  if (!obs) {
+function filterOptions(): FilterOptions {
+  if (!settings.filterEnabled) return { type: 'none' };
+  if (settings.filterType === 'kalman')
+    return {
+      type: 'kalman',
+      accel: settings.kalmanAccel,
+      noiseXY: settings.kalmanNoiseXYmm / 1000,
+      noiseZ: settings.kalmanNoiseZmm / 1000,
+    };
+  return { type: 'oneEuro', minCutoff: settings.filterMinCutoff, beta: settings.filterBeta, dCutoff: settings.filterDCutoff };
+}
+
+/** Pushes changed settings into the tracker; only real changes reset its filter. */
+let lastSync = { filter: '', geometry: '' };
+function syncTracker(): void {
+  if (!tracker) return;
+  const filter = JSON.stringify(filterOptions());
+  if (filter !== lastSync.filter) tracker.setFilter(filterOptions());
+  const geometry = JSON.stringify([display(), settings.ipdCm, settings.eye, settings.cameraHfovDeg]);
+  if (geometry !== lastSync.geometry) {
+    tracker.setDisplay(display());
+    tracker.setViewer({ ipd: settings.ipdCm / 100, eye: settings.eye });
+    tracker.setCamera({ hfovDeg: settings.cameraHfovDeg });
+  }
+  lastSync = { filter, geometry };
+  tracker.prediction.latencyCompensation = settings.latencyCompensation;
+  tracker.prediction.extraMs = settings.predictionMs;
+}
+
+function onUpdate(obs: FaceObservation | null, raw: Vec3 | null, filtered: Vec3 | null): void {
+  if (!obs || !raw || !filtered) {
     tracking = false;
     drawDebugVideo(null);
     return;
@@ -103,13 +128,7 @@ function onFace(obs: FaceObservation | null): void {
   tracking = true;
   lastObs = obs;
   lastObsTime = obs.timestamp;
-  lastCaptureTime = obs.captureTime;
   push(pipelineLatency, performance.now() - obs.captureTime, 30);
-  const raw = eyeInScreenSpace(obs, settings);
-  selectFilter();
-  // Filter on capture time so irregular delivery does not distort the speed estimate.
-  filtered = settings.filterEnabled ? filter.filter(raw, obs.captureTime / 1000) : raw;
-  if (!settings.filterEnabled) filter.reset();
   push(rawHistory, raw, 30);
   push(filteredHistory, filtered, 30);
   push(trackTimes, obs.timestamp, 30);
@@ -126,27 +145,21 @@ window.addEventListener('pointermove', (e) => {
   mouse = [e.clientX / innerWidth, e.clientY / innerHeight];
 });
 
-/** Eye position relative to the centre of the browser viewport. */
-function currentEye(vp: ReturnType<typeof viewport>): THREE.Vector3 {
-  if (!settings.headCoupling) return new THREE.Vector3(0, 0, NEUTRAL_Z);
+/** Eye position in screen space, with the effect gains applied around the viewport centre. */
+function currentEye(vp: ScreenRect): Vec3 {
+  if (!settings.headCoupling) return [vp.cx, vp.cy, NEUTRAL_Z];
 
   let e: Vec3;
   if (settings.input === 'mouse') {
     e = [(mouse[0] - 0.5) * vp.width * 1.2 + vp.cx, (0.5 - mouse[1]) * vp.height * 1.2 + vp.cy, NEUTRAL_Z];
-  } else if (filtered) {
-    const d = settings.filterEnabled ? filter.derivative() : [0, 0, 0];
-    // Extrapolate from when the frame was captured to now, capped so a stalled
-    // camera cannot fling the view away.
-    const age = settings.latencyCompensation ? Math.min(performance.now() - lastCaptureTime, 150) : 0;
-    const p = (age + settings.predictionMs) / 1000;
-    e = [filtered[0] + d[0] * p, filtered[1] + d[1] * p, filtered[2] + d[2] * p];
   } else {
-    e = [vp.cx, vp.cy, NEUTRAL_Z];
+    e = tracker?.getEye() ?? [vp.cx, vp.cy, NEUTRAL_Z];
   }
-  const x = (e[0] - vp.cx) * settings.gainXY;
-  const y = (e[1] - vp.cy) * settings.gainXY;
-  const z = NEUTRAL_Z + (e[2] - NEUTRAL_Z) * settings.gainZ;
-  return new THREE.Vector3(x, y, z);
+  return [
+    vp.cx + (e[0] - vp.cx) * settings.gainXY,
+    vp.cy + (e[1] - vp.cy) * settings.gainXY,
+    NEUTRAL_Z + (e[2] - NEUTRAL_Z) * settings.gainZ,
+  ];
 }
 
 // ---------------------------------------------------------------- debug view
@@ -154,11 +167,10 @@ const debugEl = $('debug');
 const debugText = $('debug-text');
 const debugCanvas = $<HTMLCanvasElement>('debug-video');
 const debugCtx = debugCanvas.getContext('2d')!;
-let tracker: FaceTracker | null = null;
 
 function drawDebugVideo(obs: FaceObservation | null): void {
-  if (!settings.showDebug || !tracker) return;
-  const video = tracker.video;
+  if (!settings.showDebug || !source) return;
+  const video = source.video;
   if (!video.videoWidth) return;
   const w = debugCanvas.width;
   const h = (w * video.videoHeight) / video.videoWidth;
@@ -174,7 +186,7 @@ function drawDebugVideo(obs: FaceObservation | null): void {
     return;
   }
   debugCtx.fillStyle = 'rgba(80,255,160,0.7)';
-  for (const p of obs.landmarks) debugCtx.fillRect(p.x * w, p.y * h, 1, 1);
+  for (const p of obs.landmarks ?? []) debugCtx.fillRect(p.x * w, p.y * h, 1, 1);
   debugCtx.fillStyle = '#ff4060';
   for (const [x, y] of [obs.subjectLeftPx, obs.subjectRightPx]) {
     debugCtx.beginPath();
@@ -196,8 +208,10 @@ function stdDevMm(arr: Vec3[]): Vec3 {
 }
 
 const frameTimes: number[] = [];
-function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): void {
+function updateDebugText(eyeAbs: Vec3, vp: ScreenRect): void {
   if (!settings.showDebug) return;
+  // Shown relative to the viewport centre, as before.
+  const eye = { x: eyeAbs[0] - vp.cx, y: eyeAbs[1] - vp.cy, z: eyeAbs[2] };
   debugCanvas.style.display = settings.input === 'webcam' && tracker ? 'block' : 'none';
   const fps = (times: number[]) =>
     times.length > 1 ? ((times.length - 1) * 1000) / (times[times.length - 1] - times[0]) : 0;
@@ -214,11 +228,11 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
   ];
   if (settings.input === 'webcam' && lastObs) {
     lines.push(
-      `Tracking    ${num(fps(trackTimes), 0, 3)} fps, verworfen ${num(tracker?.droppedFrames ?? 0, 0, 5)}`,
-      `Erkennung   ${num(lastObs.detectMs, 1, 5)} ms, gesamt ${num(lastObs.totalMs, 1, 5)} ms ${tracker?.useWorker ? 'Worker' : 'Haupt'}/${tracker?.delegate}`,
+      `Tracking    ${num(fps(trackTimes), 0, 3)} fps`,
+      `Erkennung   ${num(lastObs.detectMs, 1, 5)} ms ${source?.delegate ?? '?'}`,
       `Latenz      ${num(avg(pipelineLatency), 0, 4)} ms ${lastObs.hasCaptureTime ? 'ab Aufnahme' : 'ab Frame (geschätzt)'}`,
       `Alter       ${num(performance.now() - lastObsTime, 0, 4)} ms seit letztem Frame`,
-      `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight} @ ${num(tracker?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
+      `Kamera      ${lastObs.imageWidth}x${lastObs.imageHeight} @ ${num(source?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
       `Kamera-FOV  ${settings.cameraHfovDeg.toFixed(1)}°`,
       `Gierwinkel  ${num((lastObs.yaw * 180) / Math.PI, 1, 6)}°`,
       `Jitter roh  ${mm(stdDevMm(rawHistory))} mm`,
@@ -242,10 +256,9 @@ setup
   .name('Diagonale (Zoll)')
   .onFinishChange((v: number) => {
     // Derive width/height from the diagonal and the screen's pixel aspect ratio.
-    const a = screen.width / screen.height;
-    const hCm = (v * 2.54) / Math.sqrt(1 + a * a);
-    settings.screenHeightCm = +hCm.toFixed(1);
-    settings.screenWidthCm = +(hCm * a).toFixed(1);
+    const d = displayFromDiagonal(v);
+    settings.screenHeightCm = +(d.height * 100).toFixed(1);
+    settings.screenWidthCm = +(d.width * 100).toFixed(1);
     widthCtl.updateDisplay();
     heightCtl.updateDisplay();
     persist();
@@ -257,9 +270,9 @@ const presetCtl = setup
   .onChange((v: string) => applyDevice(devicePresets.find((d) => d.name === v)));
 function applyDevice(d: DevicePreset | undefined): void {
   if (!d) return;
-  settings.screenWidthCm = d.screenWidthCm;
-  settings.screenHeightCm = d.screenHeightCm;
-  settings.cameraAboveScreenCm = d.cameraAboveScreenCm;
+  settings.screenWidthCm = +(d.width * 100).toFixed(2);
+  settings.screenHeightCm = +(d.height * 100).toFixed(2);
+  settings.cameraAboveScreenCm = +(d.cameraOffsetY * 100).toFixed(2);
   settings.deviceName = d.name;
   preset.name = d.name;
   diag.zoll = diagonalInches();
@@ -275,13 +288,14 @@ setup.add(settings, 'compensateWindowPosition').name('Fensterposition beachten')
 const calib = {
   abstandCm: 60,
   kalibrieren: () => {
-    if (!lastObs) {
+    syncTracker();
+    const hfov = tracker?.calibrateDistance(calib.abstandCm / 100);
+    if (hfov == null) {
       alertInDebug('Kein Gesicht erkannt, Kalibrierung nicht möglich.');
       return;
     }
-    settings.cameraHfovDeg = +calibrateHfov(lastObs, settings, calib.abstandCm).toFixed(1);
+    settings.cameraHfovDeg = +hfov.toFixed(1);
     fovCtl.updateDisplay();
-    filter.reset();
     persist();
   },
 };
@@ -301,21 +315,9 @@ input
   .name('Kamera-Modus')
   .onChange(async () => {
     persist();
-    if (tracker) {
-      await tracker.setMode(parseMode(settings.cameraMode));
-      kalman.reset();
-      oneEuro.reset();
-    }
-  });
-input
-  .add(settings, 'detectInWorker')
-  .name('Erkennung im Worker')
-  .onChange(async () => {
-    persist();
-    if (tracker) {
-      tracker.stop();
-      tracker = null;
-      await startWebcam();
+    if (source && tracker) {
+      await source.setCameraMode(parseMode(settings.cameraMode));
+      tracker.setFilter(filterOptions());
     }
   });
 input
@@ -455,13 +457,23 @@ function parseMode(m: string): CameraMode {
 
 async function startWebcam(): Promise<void> {
   if (tracker) return;
-  tracker = new FaceTracker(onFace, settings.detectInWorker);
+  // Assets are served locally by the demo (see scripts/fetch-assets.mjs).
+  const base = new URL(import.meta.env.BASE_URL, location.href).href;
+  source = new MediaPipeFaceSource({
+    camera: parseMode(settings.cameraMode),
+    assets: { wasmBaseUrl: `${base}mediapipe/wasm`, modelUrl: `${base}mediapipe/face_landmarker.task` },
+  });
+  tracker = new HeadTracker({ display: display(), filter: filterOptions(), source });
+  tracker.subscribe((u) => onUpdate(u.observation, u.raw, u.filtered));
+  lastSync = { filter: '', geometry: '' };
+  syncTracker();
   try {
-    await tracker.start(parseMode(settings.cameraMode));
+    await tracker.resume();
     settings.input = 'webcam';
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
   } catch (e) {
     tracker = null;
+    source = null;
     settings.input = 'mouse';
     gui.controllersRecursive().forEach((c) => c.updateDisplay());
     throw e;
@@ -523,7 +535,8 @@ function frame(now: number): void {
   const vp = viewport();
   layoutIfNeeded(vp);
   const eye = currentEye(vp);
-  updateOffAxisCamera(camera, eye, vp.width, vp.height, 0.01, demo?.far ?? 20);
+  syncTracker();
+  applyOffAxis(camera, eye, vp, 0.01, demo?.far ?? 20);
   demo?.update(dt);
   renderer.render(scene, camera);
   updateDebugText(eye, vp);

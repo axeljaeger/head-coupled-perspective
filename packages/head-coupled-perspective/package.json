@@ -1,0 +1,62 @@
+{
+  "name": "head-coupled-perspective",
+  "version": "0.1.0",
+  "description": "Head-coupled perspective for the browser: webcam head tracking, smoothing and off-axis projection, with an optional three.js adapter.",
+  "keywords": [
+    "head-coupled-perspective",
+    "head-tracking",
+    "off-axis-projection",
+    "fish-tank-vr",
+    "webcam",
+    "mediapipe",
+    "three"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axeljaeger/head-coupled-perspective.git",
+    "directory": "packages/head-coupled-perspective"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./three": {
+      "types": "./dist/three.d.ts",
+      "default": "./dist/three.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types test/*.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3",
+    "three": ">=0.150.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@mediapipe/tasks-vision": "^1.2.3",
+    "@types/node": "^22.20.7",
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "typescript": "^7.0.2"
+  }
+}
