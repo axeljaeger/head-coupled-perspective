@@ -4,7 +4,7 @@ import { loadSettings, saveSettings, defaultSettings, type Settings } from './se
 import { FaceTracker, type CameraMode, type FaceObservation } from './tracking/faceTracker';
 import { OneEuroFilter3 } from './tracking/oneEuroFilter';
 import { KalmanCV3 } from './tracking/kalmanFilter';
-import { calibrateHfov, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
+import { calibrateHfov, estimateIpdCm, eyeInScreenSpace, type Vec3 } from './tracking/headPose';
 import { updateOffAxisCamera } from './projection/offAxis';
 import { detectDevice, devicePresets, type DevicePreset } from './devices';
 import type { DemoScene } from './scenes/types';
@@ -91,6 +91,13 @@ let lastCaptureTime = 0;
 const pipelineLatency: number[] = [];
 let tracking = false;
 const rawHistory: Vec3[] = [];
+const ipdSamples: number[] = [];
+/** Active automatic IPD measurement, if any. */
+let ipdMeasure: { samples: number[]; until: number } | null = null;
+const median = (a: number[]) => {
+  const s = [...a].sort((x, y) => x - y);
+  return s.length ? s[Math.floor(s.length / 2)] : 0;
+};
 const filteredHistory: Vec3[] = [];
 const trackTimes: number[] = [];
 
@@ -105,6 +112,9 @@ function onFace(obs: FaceObservation | null): void {
   lastObsTime = obs.timestamp;
   lastCaptureTime = obs.captureTime;
   push(pipelineLatency, performance.now() - obs.captureTime, 30);
+  const ipdEstimate = estimateIpdCm(obs);
+  if (ipdEstimate) push(ipdSamples, ipdEstimate, 90);
+  if (ipdMeasure && ipdEstimate) ipdMeasure.samples.push(ipdEstimate);
   const raw = eyeInScreenSpace(obs, settings);
   selectFilter();
   // Filter on capture time so irregular delivery does not distort the speed estimate.
@@ -221,6 +231,7 @@ function updateDebugText(eye: THREE.Vector3, vp: ReturnType<typeof viewport>): v
       `Kamera      ${lastObs.videoWidth}x${lastObs.videoHeight} @ ${num(tracker?.actualSettings?.frameRate ?? 0, 0, 2)} fps (angefr. ${parseMode(settings.cameraMode).fps})`,
       `Kamera-FOV  ${settings.cameraHfovDeg.toFixed(1)}°`,
       `Gierwinkel  ${num((lastObs.yaw * 180) / Math.PI, 1, 6)}°`,
+      `Augenabst.  ${num(settings.ipdCm, 2, 5)} cm, Iris-Schätzung ${num(median(ipdSamples), 2, 5)} cm`,
       `Jitter roh  ${mm(stdDevMm(rawHistory))} mm`,
       `Jitter gef. ${mm(stdDevMm(filteredHistory))} mm`,
     );
@@ -270,7 +281,33 @@ const widthCtl = setup.add(settings, 'screenWidthCm', 10, 150, 0.1).name('Breite
 const heightCtl = setup.add(settings, 'screenHeightCm', 5, 100, 0.1).name('Höhe Bild (cm)').onFinishChange(persist);
 setup.add(settings, 'cameraAboveScreenCm', -5, 10, 0.1).name('Kamera über Bildkante (cm)').onFinishChange(persist);
 const fovCtl = setup.add(settings, 'cameraHfovDeg', 30, 120, 0.1).name('Kamera-FOV horiz. (°)').onFinishChange(persist);
-setup.add(settings, 'ipdCm', 5, 7.5, 0.05).name('Augenabstand (cm)').onFinishChange(persist);
+const ipdCtl = setup.add(settings, 'ipdCm', 5, 7.5, 0.05).name('Augenabstand (cm)').onFinishChange(persist);
+setup
+  .add(
+    {
+      measureIpd: () => {
+        if (!tracker) return alertInDebug('Erst die Webcam starten.');
+        ipdMeasure = { samples: [], until: performance.now() + 3000 };
+        alertInDebug('Augenabstand wird gemessen: 3 s geradeaus in die Kamera schauen …');
+      },
+    },
+    'measureIpd',
+  )
+  .name('Augenabstand messen (Iris)');
+function finishIpdMeasurement(now: number): void {
+  if (!ipdMeasure || now < ipdMeasure.until) return;
+  const s = ipdMeasure.samples;
+  ipdMeasure = null;
+  if (s.length < 20) {
+    alertInDebug('Zu wenig Messwerte, bitte wiederholen.');
+    return;
+  }
+  settings.ipdCm = +median(s).toFixed(2);
+  ipdCtl.updateDisplay();
+  filter.reset();
+  persist();
+  alertInDebug(`Augenabstand gemessen: ${settings.ipdCm.toFixed(2)} cm`);
+}
 setup.add(settings, 'compensateWindowPosition').name('Fensterposition beachten').onFinishChange(persist);
 const calib = {
   abstandCm: 60,
@@ -519,6 +556,7 @@ function frame(now: number): void {
   const dt = Math.min((now - prev) / 1000, 0.1);
   prev = now;
   push(frameTimes, now, 60);
+  finishIpdMeasurement(now);
 
   const vp = viewport();
   layoutIfNeeded(vp);

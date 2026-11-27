@@ -37,12 +37,24 @@ screen gives you a fullscreen view.
    available to web pages). Supported: MacBook Air 13"/15", MacBook Pro
    13"/14"/15"/16", iPad Air 11". Otherwise enter the visible size of your screen (or
    just the diagonal) and how far the camera sits above the top edge.
-2. Sit still, measure the distance from your eyes to the screen, enter it
+2. Press **Augenabstand messen (Iris)** and look straight at the camera for
+   three seconds. Your eye distance is estimated from its ratio to the iris
+   diameter, which is nearly the same for all adults (about 11.7 mm). This
+   sets the scale of sideways and vertical parallax and needs no tape measure.
+3. For depth, measure the distance from your eyes to the screen once, enter it
    under *Gemessener Abstand* and press **Abstand kalibrieren**. This solves
-   for the webcam's field of view so distances come out right.
-3. Press <kbd>F</kbd> for fullscreen. In windowed mode the window position is
+   for the webcam's field of view. Without a tape measure, use the target box
+   (scene 1): lean in and out and adjust *Kamera-FOV* until the targets stay
+   put in space instead of swimming towards or away from you.
+
+Why not a purely visual "line up two markers" calibration: everything on the
+screen is rendered from the *estimated* eye position, so virtual markers line
+up whenever the estimate says they should, right or wrong. Only something
+physical (iris size, a measured distance, or your perception of objects
+staying still) can reveal the error.
+4. Press <kbd>F</kbd> for fullscreen. In windowed mode the window position is
    taken into account, but browser chrome can make it slightly off.
-4. Close one eye. With both eyes open, stereo vision tells your brain the
+5. Close one eye. With both eyes open, stereo vision tells your brain the
    screen is flat, which weakens the effect a lot.
 
 ## Camera mode

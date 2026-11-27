@@ -45,6 +45,42 @@ export function eyeInScreenSpace(obs: FaceObservation, s: Settings): Vec3 {
   return [-xCam, cameraY - yCam, z];
 }
 
+/** Average horizontal visible iris diameter of adults, in cm (about 11.7 mm, low spread). */
+export const IRIS_DIAMETER_CM = 1.17;
+
+// Iris contour landmarks (four points around each iris centre).
+const IRIS_PAIRS = [
+  [469, 471],
+  [470, 472],
+  [474, 476],
+  [475, 477],
+];
+
+/**
+ * Iris diameter in image pixels, or null if the model gave no iris points.
+ * Uses the larger of the two contour diameters per eye, which is the one
+ * least shortened by head rotation or eyelids.
+ */
+export function irisDiameterPx(obs: FaceObservation): number | null {
+  const lm = obs.landmarks;
+  if (lm.length < 478) return null;
+  const d = (a: number, b: number) =>
+    Math.hypot((lm[a].x - lm[b].x) * obs.videoWidth, (lm[a].y - lm[b].y) * obs.videoHeight);
+  const right = Math.max(d(IRIS_PAIRS[0][0], IRIS_PAIRS[0][1]), d(IRIS_PAIRS[1][0], IRIS_PAIRS[1][1]));
+  const left = Math.max(d(IRIS_PAIRS[2][0], IRIS_PAIRS[2][1]), d(IRIS_PAIRS[3][0], IRIS_PAIRS[3][1]));
+  return (right + left) / 2;
+}
+
+/**
+ * Estimates the viewer's eye distance from the ratio of eye distance to iris
+ * size in the image. Independent of camera FOV and viewing distance.
+ */
+export function estimateIpdCm(obs: FaceObservation): number | null {
+  const iris = irisDiameterPx(obs);
+  if (!iris) return null;
+  return (IRIS_DIAMETER_CM * ipdPx(obs)) / iris;
+}
+
 /**
  * Solves for the camera FOV, given that the viewer currently sits
  * `distanceCm` away from the screen.
