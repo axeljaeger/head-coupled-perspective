@@ -52,6 +52,8 @@ export interface Settings {
 
   // Presentation
   scene: 'targets' | 'cad' | 'window';
+  /** CAD scene: model position, > 0 in front of the screen (pops out), < 0 behind (cm). */
+  cadZCm: number;
   showDebug: boolean;
 }
 
@@ -81,6 +83,7 @@ export const defaultSettings: Settings = {
   gainZ: 1,
   headCoupling: true,
   scene: 'targets',
+  cadZCm: 10,
   showDebug: true,
 };
 

@@ -40,8 +40,6 @@ const context = canvas.getContext('webgl2', {
 // Logarithmic depth keeps precision from 1 cm (window frame) to kilometres (mountains).
 const renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true, logarithmicDepthBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera();
 let demo: DemoScene | null = null;
@@ -52,8 +50,15 @@ function setScene(name: Settings['scene']): void {
     demo.dispose();
   }
   demo = name === 'cad' ? new CadScene(canvas) : name === 'window' ? new WindowScene() : new TargetsScene();
+  applyCadSettings();
   scene.add(demo.root);
   scene.background = new THREE.Color(demo.background);
+  lastLayout = '';
+}
+
+function applyCadSettings(): void {
+  if (!(demo instanceof CadScene)) return;
+  demo.modelZ = settings.cadZCm / 100;
   lastLayout = '';
 }
 
@@ -409,6 +414,13 @@ const sceneCtl = effect
   .name('Szene')
   .onChange((v: Settings['scene']) => {
     setScene(v);
+    persist();
+  });
+effect
+  .add(settings, 'cadZCm', -30, 25, 1)
+  .name('CAD: Position z (cm, + = vor dem Schirm)')
+  .onChange(() => {
+    applyCadSettings();
     persist();
   });
 const debugCtl = gui.add(settings, 'showDebug').name('Debug-Anzeige (D)').onChange(applyDebugVisibility);

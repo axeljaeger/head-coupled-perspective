@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { DemoScene } from './types';
-import { disposeChildren } from './targetsScene';
 
 /** Outline drawn on top of a mesh, the way CAD viewers show model edges. */
 function withEdges(mesh: THREE.Mesh, color = 0x1b1f24): THREE.Mesh {
@@ -60,15 +59,20 @@ function gearGeometry(teeth: number, rRoot: number, rTip: number, width: number,
 }
 
 /**
- * A small mechanical assembly on a ground grid. It straddles the screen plane
- * so parts sit both behind and in front of the glass. Drag with the mouse to
- * rotate the model.
+ * A small mechanical assembly floating in front of the screen on a plain
+ * background, with nothing else in the scene to distract from the effect.
+ *
+ * An object right at the glass (z = 0) has no parallax against the screen
+ * frame: it only turns with the head and seems glued to the screen centre.
+ * Placed in front of the glass, it shifts against the head movement relative
+ * to the frame and appears to come out of the screen.
+ * The model is kept small so it is never cut off by the screen edge, which
+ * would break the illusion. Drag with the mouse to rotate.
  */
 export class CadScene implements DemoScene {
   readonly root = new THREE.Group();
   readonly background = 0xe9edf2;
   private model = new THREE.Group();
-  private ground = new THREE.Group();
   private sun = new THREE.DirectionalLight(0xffffff, 2.2);
   private lights = new THREE.Group();
   private dragging = false;
@@ -76,25 +80,17 @@ export class CadScene implements DemoScene {
   // Only yaw is user-controlled; the model stands on the ground and the
   // viewer's head provides the other viewpoints.
   private targetYaw = -0.5;
+  /** Position of the model's centre: > 0 in front of the glass (pops out), < 0 behind. Metres. */
+  modelZ = 0.1;
 
   constructor(private readonly dom: HTMLElement) {
-    this.root.add(this.lights, this.ground, this.model);
+    this.root.add(this.lights, this.model);
     // Start at the target angle so nothing animates when the scene opens.
     this.model.rotation.y = this.targetYaw;
 
     this.lights.add(new THREE.HemisphereLight(0xffffff, 0x8a9099, 1.6));
-    // Light from almost straight above so the shadow sits under the model.
     const sun = this.sun;
-    sun.position.set(-0.3, 1, 0.35);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.radius = 6;
-    sun.shadow.bias = -0.0005;
-    const sc = sun.shadow.camera;
-    sc.left = sc.bottom = -0.3;
-    sc.right = sc.top = 0.3;
-    sc.near = 0.1;
-    sc.far = 2;
+    sun.position.set(-0.3, 1, 0.8);
     this.lights.add(sun, sun.target);
 
     const steel = new THREE.MeshStandardMaterial({ color: 0xb4bcc6, metalness: 0.25, roughness: 0.45 });
@@ -151,32 +147,20 @@ export class CadScene implements DemoScene {
   };
 
   layout(width: number, height: number): void {
-    disposeChildren(this.ground);
-    const scale = Math.min(width / 0.5, height / 0.3) * 0.85;
-    // Put the floor so the model's bounding box is vertically centred on the screen.
+    const z = this.modelZ;
+    const eyeZ = 0.6;
+    // The model appears larger the closer it comes, by eyeZ / (eyeZ - z).
+    // Size it so that, seen from straight ahead, it covers about half the
+    // screen width and leaves room to move the head without hitting the edge.
+    const magnification = eyeZ / Math.max(eyeZ - z, 0.1);
+    const scale = (Math.min(width / 0.5, height / 0.3) * 0.5) / magnification;
     this.model.position.set(0, 0, 0);
     this.model.scale.setScalar(scale);
     this.model.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(this.model);
-    const floorY = -(box.max.y - box.min.y) / 2 - box.min.y;
-
-    // Invisible ground that only shows the soft shadow, so there is no hard
-    // floor edge that gets cut off by the screen border.
-    const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.5, 1.5),
-      new THREE.ShadowMaterial({ opacity: 0.3 }),
-    );
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = floorY;
-    plane.receiveShadow = true;
-    this.ground.add(plane);
-
-    this.model.position.set(0, floorY, -0.02);
-    this.model.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
-    });
-    this.sun.target.position.set(0, floorY, 0);
-    this.sun.position.set(-0.3, floorY + 1, 0.35);
+    // Centred on the screen, at depth z.
+    this.model.position.set(0, -(box.min.y + box.max.y) / 2, z);
+    this.sun.target.position.set(0, 0, z);
   }
 
   update(dt: number): void {
