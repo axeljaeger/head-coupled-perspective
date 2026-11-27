@@ -81,7 +81,7 @@ export class CadScene implements DemoScene {
   // viewer's head provides the other viewpoints.
   private targetYaw = -0.5;
   /** Position of the model's centre: > 0 in front of the glass (pops out), < 0 behind. Metres. */
-  modelZ = 0.08;
+  modelZ = 0.1;
 
   constructor(private readonly dom: HTMLElement) {
     this.root.add(this.lights, this.model);

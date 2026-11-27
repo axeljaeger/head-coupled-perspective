@@ -83,7 +83,7 @@ export const defaultSettings: Settings = {
   gainZ: 1,
   headCoupling: true,
   scene: 'targets',
-  cadZCm: 8,
+  cadZCm: 10,
   showDebug: true,
 };
 
