@@ -35,7 +35,7 @@ screen gives you a fullscreen view.
 1. Pick your device under **Aufbau → Gerät**. The start screen suggests one
    based on the screen size the browser reports (the exact model is not
    available to web pages). Supported: MacBook Air 13"/15", MacBook Pro
-   14"/16", iPad Air 11". Otherwise enter the visible size of your screen (or
+   13"/14"/15"/16", iPad Air 11". Otherwise enter the visible size of your screen (or
    just the diagonal) and how far the camera sits above the top edge.
 2. Sit still, measure the distance from your eyes to the screen, enter it
    under *Gemessener Abstand* and press **Abstand kalibrieren**. This solves

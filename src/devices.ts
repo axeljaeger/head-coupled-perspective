@@ -35,6 +35,25 @@ export const devicePresets: DevicePreset[] = [
     cssSizes: [[1280, 828], [1440, 932], [1710, 1112], [1920, 1243]],
   },
   {
+    // Same 2560 x 1600 panel as the MacBook Air 13" up to M1.
+    name: 'MacBook Pro 13" (2016–2022) / Air 13" bis M1',
+    kind: 'mac',
+    screenWidthCm: 28.64, // 2560 px @ 227 ppi
+    screenHeightCm: 17.9, // 1600 px
+    cameraAboveScreenCm: 0.6, // camera in the bezel above the panel
+    defaultCss: [1440, 900],
+    cssSizes: [[1024, 640], [1280, 800], [1440, 900], [1680, 1050]],
+  },
+  {
+    name: 'MacBook Pro 15" (2016–2019)',
+    kind: 'mac',
+    screenWidthCm: 33.25, // 2880 px @ 220 ppi
+    screenHeightCm: 20.78, // 1800 px
+    cameraAboveScreenCm: 0.6,
+    defaultCss: [1680, 1050],
+    cssSizes: [[1024, 640], [1280, 800], [1440, 900], [1680, 1050], [1920, 1200]],
+  },
+  {
     name: 'MacBook Pro 14" (M1–M5)',
     kind: 'mac',
     screenWidthCm: 30.24, // 3024 px @ 254 ppi
