@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Head-Coupled Perspective – Prototyp</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="start" class="overlay">
+      <div class="card">
+        <h1>Head-Coupled Perspective</h1>
+        <p>
+          Die Webcam schätzt die Position deiner Augen, und die Szene wird so gerendert, als wäre der
+          Bildschirm ein Fenster. Am besten im Vollbild (<kbd>F</kbd>) und mit einem Auge zu ausprobieren.
+        </p>
+        <p class="small">
+          Vorher rechts unter „Aufbau“ die Bildschirmgröße eintragen. Für genaue Entfernungen einmal
+          mit Maßband messen und „Abstand kalibrieren“ drücken.
+        </p>
+        <p id="device-suggestion" class="small"></p>
+        <div class="buttons">
+          <button id="start-webcam">Webcam starten</button>
+          <button id="start-mouse" class="secondary">Ohne Webcam (Maus)</button>
+        </div>
+        <p id="start-error" class="error"></p>
+      </div>
+    </div>
+
+    <div id="debug">
+      <canvas id="debug-video" width="240" height="135"></canvas>
+      <pre id="debug-text"></pre>
+    </div>
+
+    <div id="help">
+      <kbd>H</kbd> Kopfkopplung an/aus · <kbd>G</kbd> Filter an/aus · <kbd>K</kbd> Kalman/One Euro · <kbd>F</kbd> Vollbild · <kbd>D</kbd> Debug · <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> Szene
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
