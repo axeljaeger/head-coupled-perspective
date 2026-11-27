@@ -2,6 +2,7 @@
   "name": "head-coupled-perspective",
   "version": "0.1.0",
   "description": "Head-coupled perspective for the browser: webcam head tracking, smoothing and off-axis projection, with an optional three.js adapter.",
+  "license": "MIT",
   "keywords": [
     "head-coupled-perspective",
     "head-tracking",

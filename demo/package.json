@@ -2,6 +2,7 @@
   "name": "demo",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Evaluation demo for the head-coupled-perspective library.",
   "type": "module",
   "scripts": {

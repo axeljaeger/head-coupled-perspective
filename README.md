@@ -131,3 +131,7 @@ to the library hot-reload without a build step.
 
 Prior art: Johnny Lee's Wii Remote head tracking demo (2007), which used two
 IR LEDs on glasses and the Wii Remote's IR camera.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

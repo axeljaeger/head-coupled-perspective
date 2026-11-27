@@ -148,3 +148,7 @@ your public folder and pass `assets: { wasmBaseUrl, modelUrl }`.
 - Close one eye; stereo vision tells the brain the screen is flat.
 - Use fullscreen, or keep `compensateWindowPosition` on.
 - On Macs, turn Center Stage off: it crops and pans the camera image.
+
+## License
+
+MIT
