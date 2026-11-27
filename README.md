@@ -84,7 +84,7 @@ changes the field of view, so recalibrate the distance afterwards.
 | <kbd>K</kbd> | Switch between One Euro and Kalman filter |
 | <kbd>F</kbd> | Fullscreen |
 | <kbd>D</kbd> | Debug overlay (camera image, eye position, fps, latency, jitter) |
-| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Target box / CAD-like model (drag to rotate) / window onto a landscape |
+| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> | Target box / CAD-like model floating in front of the screen (drag to rotate; position under *Effekt*) / window onto a landscape |
 
 ## What to look at
 

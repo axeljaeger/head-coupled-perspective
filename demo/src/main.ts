@@ -52,8 +52,16 @@ function setScene(name: Settings['scene']): void {
     demo.dispose();
   }
   demo = name === 'cad' ? new CadScene(canvas) : name === 'window' ? new WindowScene() : new TargetsScene();
+  applyCadSettings();
   scene.add(demo.root);
   scene.background = new THREE.Color(demo.background);
+  lastLayout = '';
+}
+
+function applyCadSettings(): void {
+  if (!(demo instanceof CadScene)) return;
+  demo.modelZ = settings.cadZCm / 100;
+  demo.showRoom = settings.cadRoom;
   lastLayout = '';
 }
 
@@ -409,6 +417,20 @@ const sceneCtl = effect
   .name('Szene')
   .onChange((v: Settings['scene']) => {
     setScene(v);
+    persist();
+  });
+effect
+  .add(settings, 'cadZCm', -30, 25, 1)
+  .name('CAD: Position z (cm, + = vor dem Schirm)')
+  .onChange(() => {
+    applyCadSettings();
+    persist();
+  });
+effect
+  .add(settings, 'cadRoom')
+  .name('CAD: Raum hinter dem Schirm')
+  .onChange(() => {
+    applyCadSettings();
     persist();
   });
 const debugCtl = gui.add(settings, 'showDebug').name('Debug-Anzeige (D)').onChange(applyDebugVisibility);
