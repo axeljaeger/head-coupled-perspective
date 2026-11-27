@@ -4,9 +4,15 @@ Head-coupled perspective (HCP) for the browser, written in TypeScript. The
 webcam estimates where your eyes are, and the 3D scene is rendered with an
 off-axis projection so the monitor behaves like a window into the scene.
 
-This is currently an **evaluation prototype**. The question it should answer:
-is the effect convincing on a desktop with a plain webcam? Only if it is will
-it be turned into a reusable library.
+The repository has two parts:
+
+- [`packages/head-coupled-perspective`](packages/head-coupled-perspective):
+  the library (webcam head tracking, smoothing, device presets, off-axis
+  projection, optional three.js adapter). Framework-agnostic, prepared for
+  npm but not published yet. See its README for the API.
+- [`demo`](demo): the evaluation app (target box, CAD model, window scene)
+  built on the library. The question it answers: is the effect convincing on
+  a desktop with a plain webcam?
 
 ## Run it
 
@@ -17,7 +23,12 @@ npm run dev
 
 Open the printed URL (http://localhost:5173), click **Webcam starten** and
 allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
-`public/` and downloads the face landmarker model once (about 3.7 MB).
+`demo/public/` and downloads the face landmarker model once (about 3.7 MB).
+
+### Online
+
+The demo on `main` is deployed to GitHub Pages:
+https://axeljaeger.github.io/head-coupled-perspective/
 
 ### On an iPad (or another device on the network)
 
@@ -97,15 +108,35 @@ changes the field of view, so recalibrate the distance afterwards.
 
 ## How it works
 
-- `src/tracking/faceTracker.ts`: webcam + MediaPipe Face Landmarker, eye
-  centres from the eye-corner landmarks, head yaw from the face transform.
-- `src/tracking/headPose.ts`: pinhole back-projection to a metric eye
-  position in screen space; depth from the interpupillary distance in pixels
-  (yaw-corrected).
-- `src/tracking/oneEuroFilter.ts`: smoothing.
-- `src/projection/offAxis.ts`: asymmetric frustum with the physical screen as
-  the window ("generalized perspective projection").
-- `src/scenes/`: demo scenes in screen space (metres, screen plane at z = 0).
+Library (`packages/head-coupled-perspective/src`):
+
+- `sources/mediapipe.ts`: webcam + MediaPipe Face Landmarker, eye centres
+  from the eye-corner landmarks, iris size, head yaw from the face transform.
+- `eyePosition.ts`: pinhole back-projection to a metric eye position in screen
+  space; depth from the interpupillary distance in pixels (yaw-corrected);
+  IPD estimate from the iris size.
+- `filters/`: Kalman (constant velocity, default) and One Euro smoothing.
+- `tracker.ts`: ties source, estimate, filter and latency compensation together.
+- `offAxis.ts`, `three.ts`: asymmetric frustum with the physical screen as the
+  window ("generalized perspective projection"), plain and for three.js.
+
+Demo (`demo/src`): settings UI, debug overlay, and scenes in screen space
+(metres, screen plane at z = 0).
+
+## Library development
+
+```sh
+npm test            # unit tests of the library (node --test)
+npm run typecheck   # library and demo
+npm run build:lib   # ESM + .d.ts into packages/head-coupled-perspective/dist
+```
+
+The demo imports the library from source (Vite alias and TS paths), so edits
+to the library hot-reload without a build step.
 
 Prior art: Johnny Lee's Wii Remote head tracking demo (2007), which used two
 IR LEDs on glasses and the Wii Remote's IR camera.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
