@@ -25,6 +25,11 @@ Open the printed URL (http://localhost:5173), click **Webcam starten** and
 allow camera access. `npm run dev` copies the MediaPipe WASM runtime into
 `demo/public/` and downloads the face landmarker model once (about 3.7 MB).
 
+### Online
+
+The demo on `main` is deployed to GitHub Pages:
+https://axeljaeger.github.io/head-coupled-perspective/
+
 ### On an iPad (or another device on the network)
 
 ```sh
